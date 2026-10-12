@@ -28,7 +28,7 @@ The model we use is a **bigram** model: *predict the next character by looking a
 
 | File | Brick | Job |
 |---|---|---|
-| `config.py` | knobs | Every tunable number in one place |
+| `config.py` | knobs | Every knob in one place; each one is also a CLI flag (`--lr 0.01`) |
 | `data.py` | data | `load_text` (download if missing), `split` (90/10), `get_batch` (random chunks) |
 | `tokenizer.py` | tokenizer | `CharTokenizer`: 65 characters ↔ ids 0–64 |
 | `models/base.py` | model contract | `LanguageModel`: shared `forward` (logits + loss) and `generate`. A model only defines `logits(idx)` |
@@ -43,6 +43,8 @@ The model we use is a **bigram** model: *predict the next character by looking a
 ```
 uv run python mini_gpt/train.py --model BigramCounts
 uv run python mini_gpt/train.py --model BigramLogits
+uv run python mini_gpt/train.py --seed 42      # different (but repeatable) samples
+uv run python mini_gpt/train.py --seed false   # new random seed every run
 ```
 
 **Design principles**
@@ -260,6 +262,9 @@ So every model plugs into the same `forward`, loss and `generate`. softmax(log(p
 
 **Q: Why `index_put_(..., accumulate=True)` instead of `counts[a, b] += 1`?**
 With a whole tensor of pairs at once, plain `+=` counts each repeated pair only once. `accumulate=True` adds every occurrence. A Python `for` loop over 1M pairs would also be correct, just slow.
+
+**Q: Why does every run print the exact same text?**
+Because of the fixed seed (`seed = 1337` in `config.py`). Counting always gives the same table, and generating text picks each next character at random (`torch.multinomial`). A fixed seed makes PyTorch return the same "random" numbers every time, so it makes the same picks. That's on purpose: if the output changes, it's because you changed something, not because of luck. Use `--seed 42` to get a different repeatable run, or `--seed false` to get a new random one. The run prints the seed it used, so you can repeat any run you like. The loss stays about the same (~2.47) whatever the seed; only the samples change. ([PyTorch randomness notes](https://pytorch.org/docs/stable/notes/randomness.html))
 
 ---
 

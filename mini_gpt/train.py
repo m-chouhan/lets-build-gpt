@@ -1,9 +1,8 @@
 """The pipeline. Same for every model; pick one by name.
 
 Run: uv run python mini_gpt/train.py --model BigramCounts
+Any knob in config.py works as a flag, e.g. --seed 42 --lr 0.01
 """
-
-import argparse
 
 import torch
 
@@ -20,12 +19,20 @@ def sample(model, tok, n: int) -> str:
     return tok.decode(model.generate(start, n)[0].tolist())
 
 
+def set_seed(seed: int | None):
+    """Same seed => same "random" numbers => same output every run.
+    https://pytorch.org/docs/stable/notes/randomness.html
+    """
+    if seed is None:
+        torch.seed()  # fresh random seed from the OS
+    else:
+        torch.manual_seed(seed)
+    print(f"seed: {torch.initial_seed()}")  # rerun with --seed <this> to reproduce
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=MODELS, default="BigramCounts")
-    args = parser.parse_args()
-    cfg = Config()
-    torch.manual_seed(cfg.seed)
+    cfg = Config.from_cli(model=list(MODELS))
+    set_seed(cfg.seed)
 
     # 1. get data
     text = load_text(cfg.data_path, cfg.data_url)
@@ -40,8 +47,8 @@ def main():
     train_data, val_data = split(data, cfg.train_frac)
 
     # 4. make model
-    model = MODELS[args.model](tok.vocab_size, cfg)
-    print(f"model: {args.model}  (fit by {model.fit_method})")
+    model = MODELS[cfg.model](tok.vocab_size, cfg)
+    print(f"model: {cfg.model}  (fit by {model.fit_method})")
     print("\n--- BEFORE fitting ---")
     print(sample(model, tok, 200))
 
