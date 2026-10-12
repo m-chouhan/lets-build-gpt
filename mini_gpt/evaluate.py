@@ -14,3 +14,7 @@ def estimate_loss(model, data, cfg) -> float:
         _, loss = model.forward(x, y)
         losses.append(loss.item())
     return sum(losses) / len(losses)
+
+
+def report(model, train_data, val_data, cfg) -> str:
+    return f"train {estimate_loss(model, train_data, cfg):.4f}  val {estimate_loss(model, val_data, cfg):.4f}"

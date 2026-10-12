@@ -7,7 +7,7 @@ Gradient descent is iterative: guess, measure the loss, step downhill, repeat.
 import torch
 
 from data import get_batch
-from evaluate import estimate_loss
+from evaluate import report
 
 
 def fit_by_counting(model, train_data, val_data, cfg):
@@ -22,9 +22,7 @@ def fit_by_gradient_descent(model, train_data, val_data, cfg):
 
     for step in range(cfg.max_steps):
         if step % cfg.eval_interval == 0:
-            train_loss = estimate_loss(model, train_data, cfg)
-            val_loss = estimate_loss(model, val_data, cfg)
-            print(f"step {step:5d}: train {train_loss:.4f}  val {val_loss:.4f}")
+            print(f"step {step:5d}: {report(model, train_data, val_data, cfg)}")
 
         x, y = get_batch(train_data, cfg.batch_size, cfg.block_size)
         _, loss = model.forward(x, y)  # predict and measure; changes nothing

@@ -9,7 +9,7 @@ import torch
 
 from config import Config
 from data import load_text, split
-from evaluate import estimate_loss
+from evaluate import report
 from fitting import FIT_METHODS
 from models import MODELS
 from tokenizer import CharTokenizer
@@ -21,10 +21,10 @@ def sample(model, tok, n: int) -> str:
 
 
 def main():
-    cfg = Config()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=MODELS, default=cfg.model)
-    cfg.model = parser.parse_args().model
+    parser.add_argument("--model", choices=MODELS, default="BigramCounts")
+    args = parser.parse_args()
+    cfg = Config()
     torch.manual_seed(cfg.seed)
 
     # 1. get data
@@ -40,15 +40,15 @@ def main():
     train_data, val_data = split(data, cfg.train_frac)
 
     # 4. make model
-    model = MODELS[cfg.model](tok.vocab_size)
-    print(f"model: {cfg.model}  (fit by {model.fit_method})")
+    model = MODELS[args.model](tok.vocab_size, cfg)
+    print(f"model: {args.model}  (fit by {model.fit_method})")
     print("\n--- BEFORE fitting ---")
     print(sample(model, tok, 200))
 
     # 5. fit
     print()
     FIT_METHODS[model.fit_method](model, train_data, val_data, cfg)
-    print(f"final: train {estimate_loss(model, train_data, cfg):.4f}  val {estimate_loss(model, val_data, cfg):.4f}")
+    print(f"final: {report(model, train_data, val_data, cfg)}")
 
     # 6. generate
     print("\n--- AFTER fitting ---")

@@ -6,8 +6,6 @@ from pathlib import Path
 
 @dataclass
 class Config:
-    model: str = "BigramCounts"  # default for --model; see models/__init__.py
-
     # data
     data_url: str = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
     data_path: Path = Path(__file__).parent.parent / "input.txt"
