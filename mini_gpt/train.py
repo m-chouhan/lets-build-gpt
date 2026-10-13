@@ -47,14 +47,16 @@ def main():
     train_data, val_data = split(data, cfg.train_frac)
 
     # 4. make model
-    model = MODELS[cfg.model](tok.vocab_size, cfg)
+    model_class = MODELS[cfg.model]  # look up the class by name, e.g. "BigramCounts" -> BigramCounts
+    model = model_class(tok.vocab_size, cfg)  # build it
     print(f"model: {cfg.model}  (fit by {model.fit_method})")
     print("\n--- BEFORE fitting ---")
     print(sample(model, tok, 200))
 
     # 5. fit
     print()
-    FIT_METHODS[model.fit_method](model, train_data, val_data, cfg)
+    fit = FIT_METHODS[model.fit_method]  # look up the function by name, e.g. "counting" -> fit_by_counting
+    fit(model, train_data, val_data, cfg)  # run it
     print(f"final: {report(model, train_data, val_data, cfg)}")
 
     # 6. generate

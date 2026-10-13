@@ -29,6 +29,10 @@ def get_batch(data: torch.Tensor, batch_size: int, block_size: int) -> tuple[tor
         text "hello!", block_size 4  ->  x = "hell", y = "ello"
     """
     starts = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([data[i : i + block_size] for i in starts])
-    y = torch.stack([data[i + 1 : i + block_size + 1] for i in starts])
+    xs, ys = [], []
+    for i in starts:
+        xs.append(data[i : i + block_size])  # block_size chars starting at i
+        ys.append(data[i + 1 : i + block_size + 1])  # the same chars, shifted one right
+    x = torch.stack(xs)  # list of B rows of T -> one (B, T) tensor
+    y = torch.stack(ys)
     return x, y
