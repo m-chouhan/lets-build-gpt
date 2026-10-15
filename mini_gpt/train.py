@@ -9,7 +9,7 @@ import torch
 from config import Config
 from data import load_text, split
 from evaluate import report
-from fitting import FIT_METHODS
+from fitting import fit
 from models import MODELS
 from tokenizer import CharTokenizer
 
@@ -48,15 +48,14 @@ def main():
 
     # 4. make model
     model_class = MODELS[cfg.model]  # look up the class by name, e.g. "BigramCounts" -> BigramCounts
-    model = model_class(tok.vocab_size, cfg)  # build it
+    model = model_class(tok.vocab_size, cfg)  # initialize it
     print(f"model: {cfg.model}  (fit by {model.fit_method})")
     print("\n--- BEFORE fitting ---")
     print(sample(model, tok, 200))
 
     # 5. fit
     print()
-    fit = FIT_METHODS[model.fit_method]  # look up the function by name, e.g. "counting" -> fit_by_counting
-    fit(model, train_data, val_data, cfg)  # run it
+    fit(model, train_data, val_data, cfg)
     print(f"final: {report(model, train_data, val_data, cfg)}")
 
     # 6. generate

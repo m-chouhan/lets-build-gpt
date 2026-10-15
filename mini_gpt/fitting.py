@@ -35,3 +35,8 @@ FIT_METHODS = {
     "counting": fit_by_counting,
     "gradient_descent": fit_by_gradient_descent,
 }
+
+
+def fit(model, train_data, val_data, cfg):
+    """Fit the model the way it says it learns (model.fit_method)."""
+    FIT_METHODS[model.fit_method](model, train_data, val_data, cfg)

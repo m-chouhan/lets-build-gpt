@@ -5,6 +5,8 @@ Counting is the maximum likelihood estimate: https://en.wikipedia.org/wiki/Maxim
 Karpathy builds this in makemore part 1: https://www.youtube.com/watch?v=PaCmpygFfXo
 """
 
+from collections import Counter
+
 import torch
 
 from .base import LanguageModel
@@ -20,10 +22,16 @@ class BigramCounts(LanguageModel):
         self.log_probs = self._to_log_probs()
 
     def count_pairs(self, data: torch.Tensor):
-        current, following = data[:-1], data[1:]
-        # counts[current, following] += 1 for every pair at once
-        # (plain `+=` would count repeated pairs only once; accumulate=True counts them all)
-        self.counts.index_put_((current, following), torch.ones(len(current)), accumulate=True)
+        # line the text up against itself shifted by one: "First" -> (F,i) (i,r) (r,s) (s,t)
+        current, following = data[:-1].tolist(), data[1:].tolist()
+
+        # count each distinct pair in a plain dict: {(t, h): 2100, (h, e): 1500, ...}
+        # https://docs.python.org/3/library/collections.html#collections.Counter
+        pair_counts = Counter(zip(current, following))
+
+        # copy into the table (~4k distinct pairs, so this loop is quick)
+        for (a, b), n in pair_counts.items():
+            self.counts[a, b] += n
         self.log_probs = self._to_log_probs()
 
     def _to_log_probs(self) -> torch.Tensor:

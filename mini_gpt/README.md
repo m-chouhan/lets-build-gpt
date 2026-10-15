@@ -260,8 +260,8 @@ What this brick really does is *estimate the model's numbers from data*. "Fittin
 **Q: Why does `BigramCounts` return `log(probs)` as its logits?**
 So every model plugs into the same `forward`, loss and `generate`. softmax(log(p)) = p, so nothing changes for sampling, and the loss numbers are directly comparable across levels.
 
-**Q: Why `index_put_(..., accumulate=True)` instead of `counts[a, b] += 1`?**
-With a whole tensor of pairs at once, plain `+=` counts each repeated pair only once. `accumulate=True` adds every occurrence. A Python `for` loop over 1M pairs would also be correct, just slow.
+**Q: How does `count_pairs` fill the table, and why not a one-liner?**
+It first counts pairs in a plain Python `Counter` (`{(t, h): 2100, ...}`), then copies the ~4k distinct pairs into the table. An earlier version did it in one PyTorch line, `counts.index_put_((current, following), torch.ones(len(current)), accumulate=True)`: about 5× faster (0.01 s vs 0.05 s on 1M pairs), but hard to read, and it needed `accumulate=True` because plain `counts[current, following] += 1` silently counts each repeated pair only once. A plain `for` loop over all 1M pairs is the most obvious version but takes ~1.8 s. `Counter` is the middle ground: nearly as clear as the loop and still effectively instant.
 
 **Q: Why does every run print the exact same text?**
 Because of the fixed seed (`seed = 1337` in `config.py`). Counting always gives the same table, and generating text picks each next character at random (`torch.multinomial`). A fixed seed makes PyTorch return the same "random" numbers every time, so it makes the same picks. That's on purpose: if the output changes, it's because you changed something, not because of luck. Use `--seed 42` to get a different repeatable run, or `--seed false` to get a new random one. The run prints the seed it used, so you can repeat any run you like. The loss stays about the same (~2.47) whatever the seed; only the samples change. ([PyTorch randomness notes](https://pytorch.org/docs/stable/notes/randomness.html))
