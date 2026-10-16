@@ -13,7 +13,7 @@ from .base import LanguageModel
 
 
 class BigramCounts(LanguageModel):
-    fit_method = "counting"
+    train_method = "counting"
     smoothing = 1.0  # pretend every pair was seen once: https://en.wikipedia.org/wiki/Additive_smoothing
 
     def __init__(self, vocab_size: int, cfg):

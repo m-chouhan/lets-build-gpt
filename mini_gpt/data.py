@@ -1,17 +1,6 @@
-"""Raw data: get the text, split it, and serve random batches."""
-
-import urllib.request
-from pathlib import Path
+"""Raw data: split it and serve random batches."""
 
 import torch
-
-
-def load_text(path: Path, url: str) -> str:
-    """Read the dataset, downloading it first if it isn't on disk."""
-    if not path.exists():
-        print(f"downloading {url} -> {path}")
-        urllib.request.urlretrieve(url, path)
-    return path.read_text(encoding="utf-8")
 
 
 def split(data: torch.Tensor, train_frac: float) -> tuple[torch.Tensor, torch.Tensor]:

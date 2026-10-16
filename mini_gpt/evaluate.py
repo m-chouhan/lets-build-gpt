@@ -17,4 +17,7 @@ def estimate_loss(model, data, cfg) -> float:
 
 
 def report(model, train_data, val_data, cfg) -> str:
-    return f"train {estimate_loss(model, train_data, cfg):.4f}  val {estimate_loss(model, val_data, cfg):.4f}"
+    """training_loss: on text the model learns from. validation_loss: on held-out text it never learns from."""
+    training_loss = estimate_loss(model, train_data, cfg)
+    validation_loss = estimate_loss(model, val_data, cfg)
+    return f"training_loss {training_loss:.4f}  validation_loss {validation_loss:.4f}"

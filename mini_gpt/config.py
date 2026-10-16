@@ -16,8 +16,7 @@ class Config:
     model: str = "BigramCounts"
 
     # data
-    data_url: str = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
-    data_path: Path = Path(__file__).parent.parent / "input.txt"
+    data_path: Path = Path(__file__).parent.parent / "datasets" / "shakespeare.txt"  # any .txt works: --data_path datasets/names.txt
     train_frac: float = 0.9  # 90% train, 10% validation
 
     # batching
@@ -26,7 +25,7 @@ class Config:
 
     # gradient descent (ignored by counting)
     lr: float = 1e-1  # learning rate: size of each step
-    max_steps: int = 3000
+    max_steps: int = 10000
     eval_interval: int = 500
 
     # evaluation

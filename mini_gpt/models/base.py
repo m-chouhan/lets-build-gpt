@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 class LanguageModel:
-    fit_method: str  # key into fitting.FIT_METHODS
+    train_method: str  # key into training.TRAIN_METHODS
 
     def __init__(self, vocab_size: int, cfg):
         self.vocab_size = vocab_size

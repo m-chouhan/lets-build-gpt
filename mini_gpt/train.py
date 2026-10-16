@@ -1,15 +1,16 @@
 """The pipeline. Same for every model; pick one by name.
 
 Run: uv run python mini_gpt/train.py --model BigramCounts
+Other text: uv run python mini_gpt/train.py --data_path datasets/names.txt
 Any knob in config.py works as a flag, e.g. --seed 42 --lr 0.01
 """
 
 import torch
 
 from config import Config
-from data import load_text, split
+from data import split
 from evaluate import report
-from fitting import fit
+from training import train
 from models import MODELS
 from tokenizer import CharTokenizer
 
@@ -35,8 +36,8 @@ def main():
     set_seed(cfg.seed)
 
     # 1. get data
-    text = load_text(cfg.data_path, cfg.data_url)
-    print(f"dataset: {len(text):,} characters")
+    text = cfg.data_path.read_text(encoding="utf-8")
+    print(f"dataset: {cfg.data_path.name}, {len(text):,} characters")
 
     # 2. build encoder/decoder
     tok = CharTokenizer(text)
@@ -49,17 +50,17 @@ def main():
     # 4. make model
     model_class = MODELS[cfg.model]  # look up the class by name, e.g. "BigramCounts" -> BigramCounts
     model = model_class(tok.vocab_size, cfg)  # initialize it
-    print(f"model: {cfg.model}  (fit by {model.fit_method})")
-    print("\n--- BEFORE fitting ---")
+    print(f"model: {cfg.model}  (trained by {model.train_method})")
+    print("\n--- BEFORE training ---")
     print(sample(model, tok, 200))
 
-    # 5. fit
+    # 5. train
     print()
-    fit(model, train_data, val_data, cfg)
+    train(model, train_data, val_data, cfg)
     print(f"final: {report(model, train_data, val_data, cfg)}")
 
     # 6. generate
-    print("\n--- AFTER fitting ---")
+    print("\n--- AFTER training ---")
     print(sample(model, tok, cfg.gen_tokens))
 
 

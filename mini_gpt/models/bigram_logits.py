@@ -10,7 +10,7 @@ from .base import LanguageModel
 
 
 class BigramLogits(LanguageModel):
-    fit_method = "gradient_descent"
+    train_method = "gradient_descent"
 
     def __init__(self, vocab_size: int, cfg):
         super().__init__(vocab_size, cfg)

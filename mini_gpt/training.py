@@ -1,4 +1,4 @@
-"""How a model's numbers get set from data. Each model names its method via `fit_method`.
+"""How a model's numbers get set from data. Each model names its method via `train_method`.
 
 Counting is closed-form: one exact pass over the data.
 Gradient descent is iterative: guess, measure the loss, step downhill, repeat.
@@ -10,11 +10,11 @@ from data import get_batch
 from evaluate import report
 
 
-def fit_by_counting(model, train_data, val_data, cfg):
+def train_by_counting(model, train_data, val_data, cfg):
     model.count_pairs(train_data)
 
 
-def fit_by_gradient_descent(model, train_data, val_data, cfg):
+def train_by_gradient_descent(model, train_data, val_data, cfg):
     # https://en.wikipedia.org/wiki/Gradient_descent
     # AdamW = gradient descent with per-parameter step sizes and momentum:
     # https://pytorch.org/docs/stable/generated/torch.optim.AdamW.html
@@ -31,12 +31,12 @@ def fit_by_gradient_descent(model, train_data, val_data, cfg):
         optimizer.step()  # the only line that changes the parameters
 
 
-FIT_METHODS = {
-    "counting": fit_by_counting,
-    "gradient_descent": fit_by_gradient_descent,
+TRAIN_METHODS = {
+    "counting": train_by_counting,
+    "gradient_descent": train_by_gradient_descent,
 }
 
 
-def fit(model, train_data, val_data, cfg):
-    """Fit the model the way it says it learns (model.fit_method)."""
-    FIT_METHODS[model.fit_method](model, train_data, val_data, cfg)
+def train(model, train_data, val_data, cfg):
+    """Train the model the way it says it learns (model.train_method)."""
+    TRAIN_METHODS[model.train_method](model, train_data, val_data, cfg)

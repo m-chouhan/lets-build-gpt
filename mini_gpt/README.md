@@ -19,23 +19,23 @@ The model we use is a **bigram** model: *predict the next character by looking a
 ## 2. The architecture: Lego bricks
 
 ```
- ┌──────────┐   ┌───────────┐   ┌──────────────┐   ┌───────────┐   ┌──────────┐   ┌──────────┐
- │  data    │ → │ tokenizer │ → │ training set │ → │  model    │ → │   fit    │ → │ generate │
- │ download │   │ text ↔ ids│   │ train / val  │   │ (by name) │   │ (model's │   │   text   │
- │ + read   │   │           │   │ + batches    │   │           │   │  method) │   │          │
- └──────────┘   └───────────┘   └──────────────┘   └───────────┘   └──────────┘   └──────────┘
+ ┌──────────┐   ┌───────────┐   ┌──────────────┐   ┌───────────┐   ┌───────────┐   ┌──────────┐   ┌──────────┐
+ │  data    │ → │ tokenizer │ → │ training set │ → │  model    │ → │   train   │ → │ evaluate │ → │ generate │
+ │ read a   │   │ text ↔ ids│   │ train / val  │   │ (by name) │   │ (model's  │   │ training │   │   text   │
+ │ .txt     │   │           │   │ + batches    │   │           │   │  method)  │   │ / val    │   │          │
+ └──────────┘   └───────────┘   └──────────────┘   └───────────┘   └───────────┘   └──────────┘   └──────────┘
 ```
 
 | File | Brick | Job |
 |---|---|---|
 | `config.py` | knobs | Every knob in one place; each one is also a CLI flag (`--lr 0.01`) |
-| `data.py` | data | `load_text` (download if missing), `split` (90/10), `get_batch` (random chunks) |
+| `data.py` | data | `split` (90/10), `get_batch` (random chunks). Text files live in `datasets/` |
 | `tokenizer.py` | tokenizer | `CharTokenizer`: 65 characters ↔ ids 0–64 |
 | `models/base.py` | model contract | `LanguageModel`: shared `forward` (logits + loss) and `generate`. A model only defines `logits(idx)` |
 | `models/bigram_counts.py` | level 0 model | `BigramCounts`: a table of counts |
 | `models/bigram_logits.py` | level 1 model | `BigramLogits`: a table of learned logits |
 | `models/__init__.py` | registry | `MODELS = {name: class}`, so a model is picked by name |
-| `fitting.py` | fit methods | `fit_by_counting`, `fit_by_gradient_descent` |
+| `training.py` | training methods | `train_by_counting`, `train_by_gradient_descent` |
 | `evaluate.py` | scorecard | `estimate_loss`, the same measure for every model |
 | `train.py` | pipeline | Wires everything together. **Never changes between levels** |
 
@@ -48,15 +48,15 @@ uv run python mini_gpt/train.py --seed false   # new random seed every run
 ```
 
 **Design principles**
-- **The model name says what the model *is* (its structure). The fit method says how it *learns*.** These are separate bricks.
-- Each model declares its fit method in one line: `fit_method = "counting"`.
+- **The model name says what the model *is* (its structure). The training method says how it *learns*.** These are separate bricks.
+- Each model declares its training method in one line: `train_method = "counting"`.
 - Leveling up = add a model file and register it. `train.py` stays the same.
-- Dependencies point one way: `data`, `tokenizer` and `models` import nothing from each other. `evaluate` and `fitting` may use `data`. `train.py` uses everything.
+- Dependencies point one way: `data`, `tokenizer` and `models` import nothing from each other. `evaluate` and `training` may use `data`. `train.py` uses everything.
 - Code should explain its intent through names. Comments are short and link out to read more.
 
 ### The level ladder
 
-| Level | Model | Fit method | New idea |
+| Level | Model | Training method | New idea |
 |---|---|---|---|
 | 0 | `BigramCounts` | counting (closed-form) | next-token probabilities, sampling, loss as a scorecard |
 | 1 | `BigramLogits` | gradient descent (iterative) | logits, backward, optimizer |
@@ -64,7 +64,7 @@ uv run python mini_gpt/train.py --seed false   # new random seed every run
 | 3 | `AttentionHead` *(planned)* | gradient descent | looking back more than one token |
 | 4+ | … → `GPT` *(planned)* | gradient descent | the transformer |
 
-From level 1 onward, the fit method never changes. Only the model gets smarter.
+From level 1 onward, the training method never changes. Only the model gets smarter.
 
 ---
 
@@ -172,7 +172,7 @@ loss.backward()                        # backward: for each knob, which way lowe
 optimizer.step()                       # turn each knob a little that way
 ```
 
-They live in `fit_by_gradient_descent` in `fitting.py`, the one place the loop is written down.
+They live in `train_by_gradient_descent` in `training.py`, the one place the loop is written down.
 
 ---
 
@@ -188,7 +188,7 @@ The score → surprise → arrows → nudge loop doesn't care *what* produces th
 
 Actual run (seed 1337):
 
-| Model | Start | Final train / val | Why |
+| Model | Start | Final training / validation loss | Why |
 |---|---|---|---|
 | `BigramCounts` | — | 2.47 / 2.46 | The exact answer, found in one pass |
 | `BigramLogits` | 4.17 | 2.50 / 2.50 | All-zero table = uniform guess = −ln(1/65). It then learns its way to about the counting answer. (Karpathy's random init starts near 4.8.) |
@@ -197,7 +197,7 @@ Both stall around 2.5. One character of context is a hard ceiling, and that's th
 
 Output goes from random symbol soup to word-shaped gibberish with speaker names like `ROMEO:`.
 
-**train vs val loss**: train loss is measured on text the model learns from, val loss on the 10% it never sees. If val stays close to train, the model is learning general patterns rather than memorizing.
+**training_loss vs validation_loss**: training loss is measured on text the model learns from, validation loss on the held-out 10% it never sees. If validation stays close to training, the model is learning general patterns rather than memorizing.
 
 ---
 
@@ -207,7 +207,7 @@ Output goes from random symbol soup to word-shaped gibberish with speaker names 
 A function with adjustable numbers inside. Ids go in, predictions come out. "Training" means adjusting those numbers until the predictions are good. For the bigram model, the "numbers inside" are just one 65×65 table.
 
 **Q: Why break everything out of one file?**
-So each step (download → tokenize → batch → train → generate) is a brick I can open, tune or replace on its own as I learn more, without the rest breaking.
+So each step (load → tokenize → batch → train → evaluate → generate) is a brick I can open, tune or replace on its own as I learn more, without the rest breaking.
 
 **Q: What is the optimizer? Is AdamW just a known algorithm for training?**
 Yes, it's a ready-made recipe for *how to nudge* the weights. The plain version is "step downhill by a fixed amount." AdamW is smarter: it adapts the step size per weight and carries momentum, so it usually needs fewer steps. You pick it and mostly forget it.
@@ -231,7 +231,7 @@ PyTorch *adds* new gradients onto old ones by default. We want fresh arrows each
 Yes: **counting** (section 4). It produces the same bigram table with no logits, loss or optimizer. The neural version is "counting, learned slowly by trial and error." It's worth learning because it's the only version that scales to real models (section 6).
 
 **Q: Can a library abstract away the model computation?**
-PyTorch already hides the hard parts: `F.cross_entropy` (softmax + surprise), `loss.backward()` (the arrows) and `AdamW` (the nudging). Higher-level libraries like Lightning hide the loop too, but the loop is the thing I'm trying to understand, so I'm not using them. Instead, the loop lives in one clearly named function, `fit_by_gradient_descent`.
+PyTorch already hides the hard parts: `F.cross_entropy` (softmax + surprise), `loss.backward()` (the arrows) and `AdamW` (the nudging). Higher-level libraries like Lightning hide the loop too, but the loop is the thing I'm trying to understand, so I'm not using them. Instead, the loop lives in one clearly named function, `train_by_gradient_descent`.
 
 **Q: Can we start with a "stupid" approach: walk the text, count which character follows each character, and turn those counts into probabilities?**
 Yes, and it isn't stupid. It's exactly the counting method in section 4, and it's how Karpathy's *makemore* series starts. For a bigram it gives essentially the answer the neural version slowly learns its way to.
@@ -249,13 +249,13 @@ probs = (counts + 1) / (counts + 1).sum(dim=1, keepdim=True)   # each row sums t
 Yes. Counting is the most primitive way to set a model's numbers from data. That's why it became level 0 of the same pipeline instead of a side experiment.
 
 **Q: Should counting go through the same batch loop as gradient descent?**
-No. Forcing it in would make the loop harder to understand just to make the code look uniform. Counting is *closed-form* (one exact pass), and gradient descent is *iterative* (step by step). So each model declares its own `fit_method`, and `train.py` just calls it.
+No. Forcing it in would make the loop harder to understand just to make the code look uniform. Counting is *closed-form* (one exact pass), and gradient descent is *iterative* (step by step). So each model declares its own `train_method`, and `train.py` just calls it.
 
 **Q: Why the names `BigramCounts` / `BigramLogits`?**
 Plain-English names (`tally`, `nudge`) watered the idea down, and they described *how* the model learns, which isn't the model's job here. Both models have the **same structure**, a 65×65 bigram table. The only difference is what the table holds: counts or logits. After training, logits ≈ log(counts). So the name differs by exactly the word that is the lesson. The technical terms (Markov chain, maximum likelihood estimate) go in the docstrings instead.
 
-**Q: Why "fit" and not "trainer"?**
-What this brick really does is *estimate the model's numbers from data*. "Fitting a model to data" is the standard term in statistics and ML (scikit-learn's `.fit()`). It doesn't clash with PyTorch names, unlike `optimizer`, which already means AdamW. It also leaves room for the real lesson: `fit_by_counting` (closed-form) vs `fit_by_gradient_descent` (iterative).
+**Q: Why "train" and not "fit"?**
+It was called "fit" at first. "Fitting a model to data" is the statistics / scikit-learn term (`.fit()`), and it avoided a clash with PyTorch's `optimizer`. But the GPT world (Karpathy, nanoGPT, PyTorch tutorials) says **train**, and a beginner reading the blog already knows that word. So it's now `training.py` with `train_by_counting` (closed-form) vs `train_by_gradient_descent` (iterative). The lesson is the same: counting is training too.
 
 **Q: Why does `BigramCounts` return `log(probs)` as its logits?**
 So every model plugs into the same `forward`, loss and `generate`. softmax(log(p)) = p, so nothing changes for sampling, and the loss numbers are directly comparable across levels.
@@ -270,7 +270,8 @@ Because of the fixed seed (`seed = 1337` in `config.py`). Counting always gives 
 
 ## 9. Status / TODOs
 
-- [x] Rename `bigram/` → `mini_gpt/`; split model vs fit method
+- [x] Rename `bigram/` → `mini_gpt/`; split model vs training method
+- [x] Rename fit → train (`fitting.py` → `training.py`)
 - [x] Level 0: `BigramCounts` (val ≈ 2.46)
 - [x] Level 1: `BigramLogits` (val ≈ 2.50)
 - [ ] Level 2: `BigramEmbedding` as an `nn.Module` (Karpathy's version)
@@ -283,4 +284,4 @@ Because of the fixed seed (`seed = 1337` in `config.py`). Counting always gives 
 - `forward` doesn't learn; `optimizer.step()` does.
 - For a bigram, counting pairs and gradient-descent training arrive at essentially the same table.
 - Counting is training too: closed-form vs iterative is the real difference between level 0 and level 1.
-- Name things by what they *are*. Keep "what it is" (model) separate from "how it learns" (fit method).
+- Name things by what they *are*. Keep "what it is" (model) separate from "how it learns" (training method).
