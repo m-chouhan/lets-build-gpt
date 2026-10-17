@@ -19,6 +19,10 @@ class LanguageModel:
         logits = self.logits(idx)
         # cross-entropy = average surprise at the real next token:
         # https://en.wikipedia.org/wiki/Cross-entropy
+        # spelled out, it's the same as:
+        #   probs = F.softmax(logits, dim=-1)   # scores -> probabilities
+        #   p = probability each real next token got
+        #   loss = (-p.log()).mean()            # surprise, averaged
         # it wants (N, C) and (N,), so flatten batch and time into one dim
         B, T, C = logits.shape
         loss = F.cross_entropy(logits.view(B * T, C), targets.view(B * T))

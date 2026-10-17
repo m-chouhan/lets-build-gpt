@@ -2,24 +2,20 @@
 
 *Hello everyone! I recently started exploring how LLMs work, to get a better understanding of a technology that has crept into almost every part of our lives in the last few years. I'm starting this series to document what I learn and share it with the world.*
 
-So this is Part 1 of a series where I try to build a **language model from scratch, one idea at a time**, as someone who is not comfortable with neural networks yet.
-
 ---
 
 ## The plan for this series
 
-I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), but I want to do it in a way I'll actually understand. So I'm splitting it into multiple levels:
+So this is Part 1 of a series where I try to build a **language model from scratch, one idea at a time**, as someone who is not comfortable with neural networks yet. I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), but I want to do it in a way I'll actually understand. So I'm splitting it into multiple levels:
 
 1. **This post:** build the smallest *complete* system: text in, a model learns, text out, plus a way to **score** the outcome.
-2. **The posts after this:** my journey towards a better model, one idea at a time, until it can generate **Indian text**. Andrej uses Shakespeare as his example, and I'll start there too so my numbers can be checked against his. But I thought it would be great to make it learn and write from Indic texts. (Let me know in the comments which datasets I should try the model on :P)
+2. **The posts after this:** my journey towards a better model, one idea at a time, until it can generate **Indian text**. Andrej uses Shakespeare as his example, and I'll start there too so my numbers can be checked against his. But I think it would be great to make it learn and write from Indic texts. (Let me know in the comments which datasets I should try the model on :P)
 
-By the end there's a scoreboard that tells the whole story, from random gibberish to something that actually reads like text.
+By the end we will also build a scoreboard that tells the whole story, from random gibberish to something that actually reads like text.
 
 This first model is deliberately dumb. My hope is that every better model later simply plugs into the same setup.
 
 ---
-
-
 
 ## What is an LLM?
 
@@ -52,8 +48,6 @@ If you want a beautiful visual introduction to this, I highly recommend 3Blue1Br
 Now for the fun part. Strip away the **Large**, and what's left, a **language model**, is something we can build on a laptop. The one in this post has **4,225** parameters. GPT-3 has 175 billion. Same idea, just a little smaller. :)
 
 ---
-
-
 
 ## How to build a machine that writes *something*?
 
@@ -100,8 +94,6 @@ That's also what ChatGPT does, just with tokens instead of characters and a much
 
 ---
 
-
-
 ## The pipeline
 
 If you've followed along so far, the next steps are fairly obvious:
@@ -131,15 +123,13 @@ From an architecture point of view, it looks like this:
 - **Evaluate:** score the model, mostly on the locked-away 10%. More on this below.
 - **Generate:** roll dice using the model's probabilities to write new text.
 
-The pipeline script never changes. Leveling up means adding a new model and nothing else.
-
 ---
 
-
-
-## The model: just count
+## The Learning Model: just count
 
 Here's the simplest possible predictor: **look at the current character only, and guess the next one based on what usually followed it.** This is called a **bigram** model ("bi" = two: the current character and the next).
+
+that is. : P(wi | wi-1) = C(wi-q, wi) / C(wi-1)
 
 Take a tiny alphabet `{h, e, l, o}` and the training text `hello`. Every pair of neighbours is an example:
 
@@ -182,64 +172,200 @@ Here's the actual trained table, zoomed in on space and lowercase letters:
 
 *Each row is one die. Darker = more likely next character. (Rows don't add to 100% here because uppercase and punctuation are cropped out.)*
 
-Even this dumb table has learned real English:
+Some sailent observations:
 
 - After `q`, it's `u` 90% of the time.
 - After `t`, the top guess is `h` (34%). Hello, "the".
 - After `y` or `d`, about half the time comes a **space**: words end in y and d a lot.
 
-One detail: of the 4,225 possible pairs, only **1,380** ever appear in the training text. If the model gave an unseen pair 0% probability and then met one in new text, it would be *infinitely* surprised (you'll see why in a second). So we pretend every pair was seen once extra. That's called [smoothing](https://en.wikipedia.org/wiki/Additive_smoothing).
+One detail: of the 4,225 possible pairs, only **1,380** ever appear in the training text. One problem with this approach is the problem of zero probability for unseen word pairs, If the model gave an unseen pair 0% probability, then it would never be part of the generated text, to fix that, we apply a process of **[smoothing](https://en.wikipedia.org/wiki/Additive_smoothing)**, so that even the unseen pairs get assigned some non zero probabilites.
+
+[add example of generation before smoothing and after smoothing as well, so that readers get a sense of whats going on]
 
 ---
-
-
 
 ## How do we know if it's any good?
 
-This is the part I care most about, because every future post depends on it.
-
-### Why not accuracy?
-
-The obvious idea: check how often the model's top guess is right. That's a bad measure for language.
+Since we are playing with the probability of each character, the obvious idea is to check how often the model's top guess is right. But that's a bad measure for language.
 
 After `"th"`, both `e` ("the") and `a` ("that") are fine. A model that says *"e 60%, a 30%"* is doing a good job, but accuracy marks it **wrong** every time the real answer is `a`. Accuracy only counts the top guess and throws away everything else the model said.
 
-### Loss: how surprised was the model?
+So we need a score that looks at the *whole* guess, not just the top pick. Let's build it one step at a time.
 
-Instead, ask: **how much probability did the model give to what actually happened?**
+### Step 1: score a single guess
 
-- It gave the real next char **100%** → not surprised at all → loss **0**
-- It gave it **50%** → a bit surprised → loss **0.69**
-- It gave it **1%** → very surprised → loss **4.6**
-- It gave it **0%** → infinitely surprised → loss **∞** (that's why we smooth)
+Take one real pair from the text, say `t` followed by `h`. Ask the model: **how much probability did you give to what actually came next?**
 
-The formula is just `loss = -ln(probability of the real answer)`, averaged over many characters. It's called [cross-entropy](https://en.wikipedia.org/wiki/Cross-entropy). It rewards a model for being *sensibly unsure* rather than confidently wrong.
+```python
+p = probs[current][following]   # the chance the model gave to the real next character
+```
 
-### Two anchors
+Our counted table says that after `t`, the chance of `h` is **34%**. That's a decent guess. If it had said 90%, even better. If it had said 1%, it was badly caught off guard.
 
-A loss number means nothing alone, so I need reference points:
+So a good model gives **high** probability to what really happens. Now we just need to turn "high probability = good" into a number where **lower is better**, like a penalty.
 
-- **Perfect:** loss 0. Never achievable, because language is genuinely uncertain.
-- **Random guessing:** every one of the 65 characters equally likely → `-ln(1/65)` = **4.17**. **This is the bar every model must clear.** Anything near 4.17 has learned nothing.
+### Step 2: turn probability into surprise
+
+Here's the penalty everyone uses:
+
+```python
+surprise = -math.log(p)   # natural log
+```
+
+| The model gave the real next character… | How surprised? | Surprise |
+| --------------------------------------- | -------------- | -------- |
+| 100%                                    | not at all     | **0**    |
+| 50%                                     | a bit          | **0.69** |
+| 1%                                      | very           | **4.6**  |
+| 0%                                      | infinitely     | **∞**    |
+
+Why `-log` and not something else? This comes from information theory, and I'm going to take it on trust for now. (If you want the real story, StatQuest's [Entropy (for data science) Clearly Explained!!!](https://www.youtube.com/watch?v=YtebGVx-Fxw) builds surprise from scratch, and 3Blue1Brown's [Solving Wordle using information theory](https://www.youtube.com/watch?v=v68zYyaEmEA) shows the same idea through a game.) But you can feel why it's a sensible choice:
+
+- **Sure and right costs nothing.** 100% → 0.
+- **The less you expected it, the more it hurts.** And it hurts *a lot* near 0%. Saying "this will never happen" and then being wrong is the worst possible mistake. That's why we smoothed the counts: no pair is ever given exactly 0%.
+
+### Step 3: average it over lots of text
+
+One guess tells us little. So walk through real text and score **every** character, then take the average. Here's our model reading `" the king"`:
+
+| Current → next | Chance the model gave | Surprise |
+| -------------- | --------------------- | -------- |
+| `␣` → `t`      | 14.1%                 | 1.96     |
+| `t` → `h`      | 34.1%                 | 1.08     |
+| `h` → `e`      | 35.3%                 | 1.04     |
+| `e` → `␣`      | 29.2%                 | 1.23     |
+| `␣` → `k`      | **0.9%**              | **4.66** |
+| `k` → `i`      | 14.4%                 | 1.94     |
+| `i` → `n`      | 23.2%                 | 1.46     |
+| `n` → `g`      | 10.7%                 | 2.24     |
+|                | **average**           | **1.95** |
+
+"the" is easy for it. Then a word starting with `k` comes along, which it didn't see coming at all, and the surprise spikes.
+
+In code, that's the whole idea:
+
+```python
+def average_surprise(probs, data):
+    surprises = []
+    for current, following in zip(data[:-1], data[1:]):   # every neighbouring pair
+        p = probs[current][following]
+        surprises.append(-math.log(p))
+    return sum(surprises) / len(surprises)
+```
+
+**That average is the loss.** Its official name is **cross-entropy** (Aurélien Géron's [11-minute intro](https://www.youtube.com/watch?v=ErfnhcEV1O8) is the clearest explanation I found). Lower loss = less surprised by real text = a better model.
+
+#### The same thing in our real code
+
+The loop above is for understanding. In `mini_gpt`, the scoring happens in one line of `models/base.py`:
+
+```python
+logits = self.logits(idx)                    # for each current character: a row of 65 scores
+loss = F.cross_entropy(logits, targets)      # average surprise at the real next characters
+```
+
+`F.cross_entropy` is PyTorch's built-in version of our `average_surprise`. Spelled out, it does exactly the three steps from above:
+
+```python
+probs = F.softmax(logits, dim=-1)            # scores -> probabilities (each row adds up to 100%)
+p = probs[range(len(targets)), targets]      # Step 1: the chance each real next character got
+loss = (-p.log()).mean()                     # Steps 2 and 3: surprise, then average
+```
+
+### Step 4: two anchors
+
+A loss number means nothing alone. Is 1.95 good? We need reference points:
+
+- **Perfect:** loss 0. Never achievable, because language is genuinely uncertain. Even Shakespeare couldn't tell you for sure what comes after "th".
+- **Random guessing:** every one of the 65 characters equally likely, so every guess gets 1/65:
+  ```python
+  -math.log(1 / 65)   # = 4.17
+  ```
+
+  **This is the bar every model must clear.** Anything near 4.17 has learned nothing.
+
+  
+[this is food for thought section idea -> we need a short sections like this to encourage users to think more deeply or in a alternative fasion or to challenge their understanding with wisdom nuggets, we can expand this a bit more with some visualization if needed, here the insight is, the lower the characters or tokens the model is torn between, the better the outcome.]  
+Note: Here's a handy way to feel a loss number: `e^loss` tells you roughly how many characters the model is "torn between". Random guessing is e^4.17 = **65**, torn between everything. A loss of 2.46 is e^2.46 ≈ **12**. Same alphabet, but now it's like choosing among 12 instead of 65.
 
 
 
-### Training vs validation: the honesty check
+### Step 5: training vs validation, the honesty check
 
-Remember the 10% we locked away? We measure loss on **both** parts:
+There's one trap left. If we score the model on the **same** text it learned from, it can look great just by having memorized that text. A student who has seen the exam answers will ace the exam, but that doesn't mean they learned anything.
 
-- **Training loss:** on text the model learned from.
-- **Validation loss:** on held-out text it has **never seen**.
+That's why, before any counting, we locked away the last 10% of the text:
 
-Training data changes the model; validation data only judges it. If training loss is great but validation loss is bad, the model memorized instead of learning patterns. That's called [overfitting](https://en.wikipedia.org/wiki/Overfitting). Validation loss is the number that goes on the scoreboard.
+```python
+n = int(0.9 * len(data))
+train_data = data[:n]   # the model learns from this
+val_data   = data[n:]   # the model never sees this until the test
+```
+
+Only `train_data` ever changes the model. Then we score it on **both** parts, using exactly the same measuring stick:
+
+```python
+model.count_pairs(train_data)   # learn: only from the training text
+
+training_loss   = average_surprise(probs, train_data)   # how well it fits what it studied
+validation_loss = average_surprise(probs, val_data)     # how well it does on new text
+```
+
+How to read the two numbers:
+
+- **Both close together:** the model learned patterns that carry over to new text. 👍
+- **Training loss much lower than validation loss:** the model memorized its training text instead of learning general patterns. That's called **overfitting** (StatQuest: [Bias and Variance](https://www.youtube.com/watch?v=EuBBz3bI-aA)).
+
+Validation loss is the honest number, so **validation loss is the number that goes on the scoreboard.**
+
+### Step 6: batching, a poll instead of a census
+
+Strictly speaking, the loss is the average surprise over **every** character: about 1 million in the training text and 111,540 in the validation text. That's the exact answer. But that's not quite what our code does. It takes a **poll**.
+
+It works like an opinion poll before an election: instead of asking the whole country, you ask a few thousand random people and get very close to the real answer.
+
+The `get_batch` brick does the sampling. It cuts out random chunks of text, plus the same chunks shifted one character to the right:
+
+```
+text "hello!", chunk size 4  ->  x = "hell"   (current characters)
+                                 y = "ello"   (what really came next)
+```
+
+Lined up, every position is one guess to score: `h→e`, `e→l`, `l→l`, `l→o`. So a chunk of 8 characters gives 8 guesses.
+
+```python
+x, y = get_batch(val_data, batch_size=32, block_size=8)   # 32 random chunks of 8 characters
+```
+
+One **batch** is 32 chunks × 8 characters = **256 guesses**. The scorecard averages 50 batches, which is **12,800 guesses** in total. Here's the real code from `evaluate.py`:
+
+```python
+def estimate_loss(model, data, cfg):
+    losses = []
+    for _ in range(cfg.eval_iters):                              # 50 batches
+        x, y = get_batch(data, cfg.batch_size, cfg.block_size)   # 32 random chunks of 8
+        _, loss = model.forward(x, y)                            # average surprise on this batch
+        losses.append(loss.item())
+    return sum(losses) / len(losses)
+```
+
+Why not just score everything? For our tiny 65×65 table, scoring every character would be instant. But real LLMs train on *hundreds of billions* of tokens, and scoring all of them every time you want a progress report would cost about as much as the training itself. This is a standard practice for evaluation and benchmarking of any model. 
+
+The price of a poll is a little **noise**. I ran the same poll 20 times on the validation text:
+
+![20 polls of validation loss vs the exact value](images/loss_polls.png)
+
+Every poll lands between 2.45 and 2.49, around the exact value of 2.482. Good enough to compare models, but it means **a difference in the second decimal place is just noise.** If a future model improves by 0.01, that's not a win.
 
 ---
 
-
-
 ## Results
 
-Before counting, the table is all zeros (plus smoothing), so every character is equally likely. This is what that writes:
+### Before: an empty table
+
+Before counting, the table is all zeros (plus smoothing), so every character is equally likely. 
+
+[add training loss , validation loss for the random one as well]
 
 ```
 CpzlYaS ;czde.'wEiT,YVrzlGu-?YeNY
@@ -247,7 +373,7 @@ ijbo
 Lzzj$KUKS-A.U FisVJiG HT,OP;W;,qe$zOAnsz-imHzPAkfEfYSgS;RTNBE:myOzk.
 ```
 
-After one counting pass over the training text:
+### After: one counting pass
 
 ```
 final: training_loss 2.4702  validation_loss 2.4599
@@ -263,28 +389,33 @@ thay taty we boors flce IO:
 
 It's still gibberish, but it's **shaped** gibberish: word-sized chunks, spaces in sensible places, capitalized lines, `the`, `we`, `out`, even a speaker-ish `RIZA` and `IO:`. All from a table of pair counts.
 
-Training and validation loss are nearly identical (2.47 vs 2.46), so there's no overfitting. That makes sense: a 65×65 table is too small to memorize a million characters.
+### Reading the numbers
+
+Now we can read these numbers with everything from the previous section:
+
+|                 | training_loss | validation_loss | Torn between about… |
+| --------------- | ------------- | --------------- | ------------------- |
+| before counting | 4.17          | 4.17            | 65 characters       |
+| after counting  | 2.47          | 2.46            | 12 characters       |
+
+- **4.17 → 2.46:** the model went from torn between all 65 characters to torn between about 12. That's a lot of uncertainty removed just by counting.
+- **Training ≈ validation:** no overfitting. 
+- **Validation slightly *lower* than training?** That's the poll noise from Step 6.
 
 ---
 
-
-
 ## Scoreboard v1
-
 
 | Level | Model        | How it learns | Validation loss | Sample                    |
 | ----- | ------------ | ------------- | --------------- | ------------------------- |
 | —     | random guess | —             | 4.17            | `CpzlYaS ;czde.'wEiT`     |
 | 0     | BigramCounts | counting      | **2.46**        | `thay taty we boors flce` |
 
-
 ![Scoreboard: validation loss per level](images/scoreboard.png)
 
-From 4.17 to 2.46 just by counting pairs.
+From 4.17 to 2.46 just by counting pairs!
 
 ---
-
-
 
 ## The ceiling
 
@@ -294,8 +425,23 @@ Counting more text won't fix that. To look further back we'd need a bigger table
 
 So the next step is to stop counting and start **learning** the table instead, by trial and error, with a method that doesn't care how big the model gets. That method (gradient descent) is what eventually trains a GPT.
 
-**Next post:** *Same score, new engine.* We throw away counting, start from a table of zeros, and teach it by nudging.
+---
+
+## Wrapping up
+
+In this post we built:
+
+- **A pipeline:** load data → tokenizer → training / validation split → train → evaluate → generate.
+- **The simplest language model:** a 65×65 table of "what usually comes next", trained by just counting.
+- **A scorecard:** the average surprise (cross-entropy), measured on text the model has never seen, with two anchors (4.17 = random, 0 = perfect) and a poll to keep it fast.
+- **Scoreboard v1:** from 4.17 to 2.46.
+
+The model is dumb, but the setup isn't. Every future model plugs into the same pipeline and gets judged by the same scorecard, so every improvement shows up as a new row on the scoreboard.
+
+**Next post:** *Same score, new engine.* We throw away counting, start from a table of zeros, and teach it by nudging, and we'll watch the loss fall step by step.
+
+If something here didn't click, or you know a better way to explain it, tell me in the comments. I'm learning this too :)
 
 ---
 
-*Code for this post:* `[mini_gpt/](../mini_gpt/)` *· run it with* `uv run python mini_gpt/train.py --model BigramCounts`
+*Code for this post:* [mini_gpt/](../mini_gpt/) · *run it with* `uv run python mini_gpt/train.py --model BigramCounts`

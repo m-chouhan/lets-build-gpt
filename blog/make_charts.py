@@ -15,6 +15,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent.parent / "mini_gpt"))  # reuse the real model code
 from config import Config
 from data import split
+from evaluate import estimate_loss
 from models import BigramCounts
 from tokenizer import CharTokenizer
 
@@ -106,6 +107,41 @@ def bigram_heatmap():
     fig.suptitle("The whole model: one row = one dice to roll", x=0.06, ha="left", color=TEXT, fontsize=13)
     fig.tight_layout()
     fig.savefig(IMAGES / "bigram_heatmap.png", dpi=200)
+
+
+def poll_chart(polls=20):
+    """Validation loss estimated from random samples ("polls") vs the exact average over every pair."""
+    cfg = Config()
+    text = cfg.data_path.read_text(encoding="utf-8")
+    tok = CharTokenizer(text)
+    data = torch.tensor(tok.encode(text), dtype=torch.long)
+    train_data, val_data = split(data, cfg.train_frac)
+
+    model = BigramCounts(tok.vocab_size, cfg)
+    model.count_pairs(train_data)
+
+    estimates = []
+    for seed in range(polls):
+        torch.manual_seed(seed)  # a different random sample each time
+        estimates.append(estimate_loss(model, val_data, cfg))
+
+    # exact: score every neighbouring pair in the validation text
+    surprises = -model.log_probs[val_data[:-1], val_data[1:]]
+    exact = surprises.mean().item()
+
+    fig, ax = plt.subplots(figsize=(8, 2.4), facecolor=SURFACE)
+    style(ax)
+    ax.scatter(estimates, [0] * len(estimates), s=60, color=BLUE, alpha=0.6, edgecolors=SURFACE, linewidths=1.5)
+    ax.plot([exact, exact], [-0.35, 0.35], color=TEXT, linewidth=1.5)  # short line so it doesn't cross the labels
+    ax.text(exact, 0.5, f"exact, every pair: {exact:.3f}", ha="center", color=TEXT, fontsize=10)
+    ax.text(min(estimates), -0.6, f"each dot: one poll of 12,800 random characters ({polls} polls)", ha="left", color=TEXT_MUTED, fontsize=10)
+    ax.set_ylim(-1, 1)
+    ax.set_yticks([])
+    ax.set_xlim(2.40, 2.55)
+    ax.set_title("Validation loss: a poll is close, but not exact", loc="left", color=TEXT, fontsize=12)
+
+    fig.tight_layout()
+    fig.savefig(IMAGES / "loss_polls.png", dpi=200)
 
 
 # made-up probabilities, just to show the loop: (text so far, next-word guesses, word picked)
@@ -203,6 +239,7 @@ if __name__ == "__main__":
     IMAGES.mkdir(exist_ok=True)
     scoreboard_chart()
     bigram_heatmap()
+    poll_chart()
     prediction_animation()
     char_prediction_animation()
     print(f"saved charts to {IMAGES}")
