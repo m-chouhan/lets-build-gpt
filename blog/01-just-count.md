@@ -6,44 +6,36 @@
 
 ## The plan for this series
 
-So this is Part 1 of a series where I try to build a **language model from scratch, one idea at a time**, as someone who is not comfortable with neural networks yet. I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), but I want to do it in a way I'll actually understand. So I'm splitting it into multiple levels:
+This is Part 1 of a series where I build a **language model from scratch, one idea at a time**, as someone who isn't comfortable with neural networks yet. I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), split into small levels I can actually understand:
 
-1. **This post:** build the smallest *complete* system: text in, a model learns, text out, plus a way to **score** the outcome.
-2. **The posts after this:** my journey towards a better model, one idea at a time, until it can generate **Indian text**. Andrej uses Shakespeare as his example, and I'll start there too so my numbers can be checked against his. But I think it would be great to make it learn and write from Indic texts. (Let me know in the comments which datasets I should try the model on :P)
-
-By the end we will also build a scoreboard that tells the whole story, from random gibberish to something that actually reads like text.
-
-This first model is deliberately dumb. My hope is that every better model later simply plugs into the same setup.
+1. **This post:** the smallest *complete* system: text in, a model learns, text out, plus a way to **score** it. The model is deliberately dumb. What matters is the setup, because every better model will plug into it.
+2. **The posts after this:** one new idea per post, each one adding a row to a **scoreboard** that goes from random gibberish to something that actually reads like text. I'm starting with Shakespeare, like Andrej, so my numbers can be checked against his. The end goal is a model that learns from and writes **Indian text**. (Which datasets should I try? Tell me in the comments :P)
 
 ---
 
 ## What is an LLM?
 
-LLM, as the name suggests, is a
-
-- **L**arge
-- **L**anguage
-- **M**odel
-
-It's a sophisticated piece of tech that **predicts the next word** (more precisely, the next *token*: a word or a piece of one) in a language it was trained on. Each of the three words is doing real work:
-
-**Large:** everything about these models is huge.
-
-- **Data:** they're trained on trillions of words: a big chunk of the public internet, books and code. That's tens of terabytes of text even after cleaning, filtered down from raw web crawls that run into petabytes.
-- **Compute:** training one takes thousands of GPUs running for weeks or months.
-- **Parameters:** these are the adjustable numbers inside the model, tuned during training. GPT-3 (2020) had **175 billion** of them, and today's models have hundreds of billions or more.
-
-**Language:** why language? Because almost all of that data is human language: articles, books, conversations, code. Language is what the model learns, and language is what it produces.
-
-**Model:** the machine itself: a giant formula full of those parameters (also called *weights*). It takes the text a user gives it, computes a probability for every possible next token, and uses those to complete the text.
+LLM stands for **Large Language Model**. It's a sophisticated piece of tech that **predicts the next word** (more precisely, the next *token*) in a language it was trained on.
 
 That's really the whole trick. Predict the next token, add it to the text, and ask again. Do that in a loop and the model *writes*:
 
 ![An LLM predicting the next word, one step at a time](images/llm_prediction.gif)
 
-*Made-up probabilities, but the real loop: guess the next word, pick one, append it, repeat.*
+*Made-up probabilities, but the loop is real: guess the next word, pick one, append it, repeat.*
 
-If you want a beautiful visual introduction to this, I highly recommend 3Blue1Brown's [Large Language Models explained briefly](https://www.youtube.com/watch?v=LPZh9BOjkQs).
+The name isn't just branding, each word actually means something:
+
+**Large:** everything about these models is huge.
+
+- **Data:** trillions of words: a big chunk of the public internet, books and code. A person reading 8 hours a day would need hundreds of thousands of years to get through it.
+- **Compute:** training one takes thousands of GPUs running for weeks or months.
+- **Parameters:** the adjustable numbers inside the model, tuned during training. GPT-3 (2020) had **175 billion** of them, and today's models have hundreds of billions or more.
+
+**Language:** almost all of that data is human language (articles, books, conversations), plus code, which is a language too. Language is what the model learns, and language is what it produces.
+
+**Model:** the machine itself: a giant formula full of those parameters (also called *weights*). It doesn't look anything up. Everything it learned is squeezed into those numbers, and from them it computes a probability for every possible next token.
+
+If you want a beautiful visual introduction to all this, I highly recommend 3Blue1Brown's [Large Language Models explained briefly](https://www.youtube.com/watch?v=LPZh9BOjkQs).
 
 Now for the fun part. Strip away the **Large**, and what's left, a **language model**, is something we can build on a laptop. The one in this post has **4,225** parameters. GPT-3 has 175 billion. Same idea, just a little smaller. :)
 
@@ -51,7 +43,7 @@ Now for the fun part. Strip away the **Large**, and what's left, a **language mo
 
 ## How to build a machine that writes *something*?
 
-Hmm, the simplest way: ask the machine to pick random characters, one after another, and boom, you have a machine that writes :P :P
+Hmm, the simplest way: ask the machine to pick random characters, one after another, and boom, you have a machine that writes, hehe :P
 
 ```python
 # an extremely dumb machine that writes, hehe..
@@ -82,6 +74,9 @@ Answer : We learn them from examples. For that we first need a **dataset**: a lo
 ```
 First Citizen:
 Before we proceed any further, hear me speak.
+--
+cat datasets/shakespeare.txt | wc
+40000  202651 1115394
 ```
 
 Once we have the probabilities, writing is the same loop as the LLM animation above, just one character at a time:
@@ -94,19 +89,18 @@ That's also what ChatGPT does, just with tokens instead of characters and a much
 
 ---
 
-## The pipeline
+## Okay, so how do we turn it into code? What do we build?
 
-If you've followed along so far, the next steps are fairly obvious:
+If you've followed along so far, the next steps are fairly obvious. To build this machine we need to:
 
 1. **Load** the text.
 2. **Turn it into numbers**, because computers only understand numbers.
-3. **Count** every pair of neighbouring characters and turn the counts into probabilities. This counting is our "training".
-4. **Store** those probabilities somewhere. That's the model.
-5. **Generate** new text by rolling dice with those probabilities. Yay!
+3. **Hide a slice** of it, so we can later test the model on text it has never seen.
+4. **Count** every pair of neighbouring characters and store the probabilities in a table. That table is our model, and the counting is our "training".
+5. **Evaluate** how good the model is.
+6. **Generate** new text by rolling dice with those probabilities. Yay!
 
-There's one extra step: before training, we hide a slice of the text so we can score the model on text it hasn't seen (more on that below).
-
-From an architecture point of view, it looks like this:
+In code, each step is its own small brick, like Lego:
 
 ```
  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐
@@ -116,20 +110,32 @@ From an architecture point of view, it looks like this:
  └────────────┘   └────────────┘   └────────────┘   └────────────┘   └────────────┘   └────────────┘
 ```
 
-- **Load data:** read a `.txt` file. Swap the file and you change what the model learns.
-- **Tokenizer:** computers don't read letters, they read numbers. The text uses 65 distinct characters, so each gets an id from 0 to 64. `"hi"` → `[46, 47]`.
-- **Training / validation split:** the first 90% of the text is for learning. The last 10% is **locked away** for testing.
-- **Train the model:** the **model** is a tensor, which is essentially a 2D array (a grid of numbers), that stores the probability of each next character. **Training** fills in those numbers from the character pairs. In this post, training just means counting.
-- **Evaluate:** score the model, mostly on the locked-away 10%. More on this below.
-- **Generate:** roll dice using the model's probabilities to write new text.
+| Brick | What it does in this post |
+| --- | --- |
+| **Load data** | Reads `datasets/shakespeare.txt`. Swap the file and you change what the model learns. |
+| **Tokenizer** | The text uses 65 distinct characters, so each gets an id from 0 to 64: `"hi"` → `[46, 47]`. |
+| **Training / validation split** | The first 90% is for learning. The last 10% is **locked away** for testing. |
+| **Train the model** | The model is a *tensor*, a fancy name for a grid of numbers. Here it's 65×65, one row per character, and counting fills it in. |
+| **Evaluate** | Scores the model on the locked-away 10%. *How* to score it turns out to be the trickiest question in this post. We'll get there. |
+| **Generate** | Rolls dice using the model's probabilities to write new text. |
+
+Why bricks? Because in the posts that follow, only the **model** and its **training** change. Everything else stays the same, including the scorecard, so every new model is judged in exactly the same way.
+
+Most of these bricks are plumbing. The interesting one is the model, so let's start there.
 
 ---
 
-## The Learning Model: just count
+## How do we make the machine learn human language?
 
 Here's the simplest possible predictor: **look at the current character only, and guess the next one based on what usually followed it.** This is called a **bigram** model ("bi" = two: the current character and the next).
 
-that is. : P(wi | wi-1) = C(wi-q, wi) / C(wi-1)
+As a formula:
+
+```
+P(next | current) = count(current, next) / count(current)
+```
+
+In words: out of all the times we saw `current`, how often was it followed by `next`?
 
 Take a tiny alphabet `{h, e, l, o}` and the training text `hello`. Every pair of neighbours is an example:
 
@@ -172,15 +178,43 @@ Here's the actual trained table, zoomed in on space and lowercase letters:
 
 *Each row is one die. Darker = more likely next character. (Rows don't add to 100% here because uppercase and punctuation are cropped out.)*
 
-Some sailent observations:
+Even this dumb table has picked up some real English:
 
-- After `q`, it's `u` 90% of the time.
-- After `t`, the top guess is `h` (34%). Hello, "the".
-- After `y` or `d`, about half the time comes a **space**: words end in y and d a lot.
+| After… | Top guess for next | How often | Why |
+| --- | --- | --- | --- |
+| `q` | `u` | 90% | English almost always writes "qu" |
+| `t` | `h` | 34% | Hello, "the" |
+| `y` | space | 50% | Lots of words end in y |
+| `d` | space | 45% | Lots of words end in d |
 
-One detail: of the 4,225 possible pairs, only **1,380** ever appear in the training text. One problem with this approach is the problem of zero probability for unseen word pairs, If the model gave an unseen pair 0% probability, then it would never be part of the generated text, to fix that, we apply a process of **[smoothing](https://en.wikipedia.org/wiki/Additive_smoothing)**, so that even the unseen pairs get assigned some non zero probabilites.
+### One problem: pairs we never saw
 
-[add example of generation before smoothing and after smoothing as well, so that readers get a sense of whats going on]
+Most possible pairs never show up in the training text:
+
+| Pairs | Count |
+| --- | --- |
+| Possible pairs (65 × 65) | 4,225 |
+| Seen in the training text | 1,380 |
+| Never seen, so the model gives them **0%** | 2,845 |
+| Pairs in the locked-away validation text that never appeared in training | **187** (e.g. `dt`, `fn`, `z!`) |
+
+That last row is the trouble. To the model, those 187 pairs are *impossible*. When we score it later, one impossible event is enough to make the score infinitely bad.
+
+The fix is called **smoothing**: pretend every pair was seen **once** extra before counting. Unseen pairs now get a tiny chance instead of zero:
+
+```python
+probs = (counts + 1) / (counts + 1).sum(dim=1, keepdim=True)   # +1 = smoothing
+```
+
+Here's the same model, with the same dice rolls, with and without it:
+
+| | Without smoothing | With smoothing |
+| --- | --- | --- |
+| Generated text | `Cars an tcede.` `Y in, lanoul-see waindonse…` | `Cprs an tcede.` `YEin, lanoul-see waindonse…` |
+| Never-seen pairs in 2,000 generated characters | 0 | 4 (`Cp`, `YE`, `wx`, `OI`) |
+| Validation loss | **∞** | **2.48** |
+
+The writing barely changes, but the score goes from **∞** to **2.48**. We'll see exactly why in the next section.
 
 ---
 
@@ -284,11 +318,8 @@ A loss number means nothing alone. Is 1.95 good? We need reference points:
 
   **This is the bar every model must clear.** Anything near 4.17 has learned nothing.
 
-  
 [this is food for thought section idea -> we need a short sections like this to encourage users to think more deeply or in a alternative fasion or to challenge their understanding with wisdom nuggets, we can expand this a bit more with some visualization if needed, here the insight is, the lower the characters or tokens the model is torn between, the better the outcome.]  
 Note: Here's a handy way to feel a loss number: `e^loss` tells you roughly how many characters the model is "torn between". Random guessing is e^4.17 = **65**, torn between everything. A loss of 2.46 is e^2.46 ≈ **12**. Same alphabet, but now it's like choosing among 12 instead of 65.
-
-
 
 ### Step 5: training vs validation, the honesty check
 
