@@ -3,8 +3,12 @@ name = "lets-build-gpt"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "ipykernel>=7.4.0",
-    "jupyter>=1.1.1",
-    "numpy>=2.5.3",
+    "numpy>=2.5.3",  # torch warns without it
     "torch>=2.14.1",
+]
+
+[dependency-groups]
+blog = [  # only for blog/make_charts.py
+    "matplotlib",
+    "pillow",
 ]

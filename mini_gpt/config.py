@@ -1,7 +1,7 @@
 """All the knobs in one place. Tune here, not inside the other files.
 
 Every knob has a default here, and every knob can be overridden from the
-command line with a flag of the same name: --model BigramLogits --lr 0.01
+command line with a flag of the same name: --seed 42 --eval_iters 100
 """
 
 import argparse
@@ -16,17 +16,12 @@ class Config:
     model: str = "BigramCounts"
 
     # data
-    data_path: Path = Path(__file__).parent.parent / "datasets" / "shakespeare.txt"  # any .txt works: --data_path datasets/names.txt
+    data_path: Path = Path(__file__).parent.parent / "datasets" / "shakespeare.txt"  # any .txt works: --data_path my_text.txt
     train_frac: float = 0.9  # 90% train, 10% validation
 
-    # batching
+    # batching (random chunks used for scoring)
     batch_size: int = 32  # B: chunks processed in parallel
     block_size: int = 8  # T: characters per chunk (max context)
-
-    # gradient descent (ignored by counting)
-    lr: float = 1e-1  # learning rate: size of each step
-    max_steps: int = 10000
-    eval_interval: int = 500
 
     # evaluation
     eval_iters: int = 50  # batches averaged per loss estimate

@@ -1,6 +1,6 @@
 """Charts for the blog posts. Saved as PNGs in blog/images/.
 
-Run: uv run --with matplotlib python blog/make_charts.py
+Run: uv run --group blog python blog/make_charts.py
 """
 
 import io

@@ -1,8 +1,8 @@
 """The pipeline. Same for every model; pick one by name.
 
 Run: uv run python mini_gpt/train.py --model BigramCounts
-Other text: uv run python mini_gpt/train.py --data_path datasets/names.txt
-Any knob in config.py works as a flag, e.g. --seed 42 --lr 0.01
+Other text: uv run python mini_gpt/train.py --data_path my_text.txt
+Any knob in config.py works as a flag, e.g. --seed 42
 """
 
 import torch
