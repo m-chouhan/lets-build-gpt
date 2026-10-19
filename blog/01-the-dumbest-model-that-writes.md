@@ -277,7 +277,7 @@ p = probs[current][following]   # the chance the model gave to the real next cha
 
 Our counted table says that after `t`, the chance of `h` is **34%**. That's a decent guess. If it had said 90%, even better. If it had said 1%, it was badly caught off guard.
 
-In other words, So the higher the '`p` '(probability), the less surprised the model was. hmm,
+In other words: the higher the probability `p`, the less surprised the model was. Hmm...
 
 ### Step 2: turn probability into surprise
 
@@ -316,9 +316,9 @@ Does it match your table? It ticks every box:
 >
 > It feels like it should be one surprise plus another: 0.69 + 0.69 = 1.39. Now check: two heads is a 25% event, and `-log(0.25)` = **1.39**. The surprises just add up!
 >
-> That's the whole reason for the log: probabilities *multiply* (50% × 50% = 25%), but surprise should *add*, and log is the function that turns multiplying into adding. Shannon's insight, in one coin flip.
+> That's the whole reason for the log: probabilities *multiply* (50% × 50% = 25%), but surprise should *add*, and log is the function that turns multiplying into adding.
 >
-> Go deeper: [Information is surprise](https://plus.maths.org/information-surprise) on Plus Magazine is a gentle read. StatQuest's [Entropy (for data science) Clearly Explained!!!](https://www.youtube.com/watch?v=YtebGVx-Fxw) builds surprise from scratch, and 3Blue1Brown's [Solving Wordle using information theory](https://www.youtube.com/watch?v=v68zYyaEmEA) shows the same idea through a game.
+> Go deeper: StatQuest's [Entropy (for data science) Clearly Explained!!!](https://www.youtube.com/watch?v=YtebGVx-Fxw) builds surprise from scratch, and 3Blue1Brown's [Solving Wordle using information theory](https://www.youtube.com/watch?v=v68zYyaEmEA) shows the same idea through a game.
 
 ### Step 3: average it over lots of text
 
@@ -379,8 +379,6 @@ A loss number means nothing alone. We need some reference points to compare it a
   ```
 
   **This is the bar every model must clear.** Anything near 4.17 has learned nothing.
-
-[this is food for thought section idea -> we need a short sections like this to encourage users to think more deeply or in a alternative fasion or to challenge their understanding with wisdom nuggets, we can expand this a bit more with some visualization if needed, here the insight is, the lower the characters or tokens the model is torn between, the better the outcome.]  
 
 > **🐇 Rabbit hole: what does a loss number actually *feel* like?**
 >
@@ -503,8 +501,6 @@ Now we can read these numbers with everything from the previous section:
 | —     | random guess | —             | 4.17            | `CpzlYaS ;czde.'wEiT`     |
 | 0     | BigramCounts | counting      | **2.46**        | `thay taty we boors flce` |
 
-![Scoreboard: validation loss per level](images/scoreboard.png)
-
 From 4.17 to 2.46 just by counting pairs!
 
 ---
@@ -532,4 +528,4 @@ If something here didn't click, or you know a better way to explain it, tell me 
 
 ---
 
-*Code for this post:* [mini_gpt/](../mini_gpt/) · *run it with* `uv run python mini_gpt/train.py --model BigramCounts`
+*Code for this post:* [github.com/m-chouhan/lets-build-gpt](https://github.com/m-chouhan/lets-build-gpt/tree/main/mini_gpt)
