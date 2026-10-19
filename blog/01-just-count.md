@@ -8,7 +8,7 @@
 
 This is Part 1 of a series where I build a **language model from scratch, one idea at a time**, as someone who isn't comfortable with neural networks yet. I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), split into small levels I can actually understand:
 
-1. **This post:** the smallest *complete* system: text in, a model learns, text out, plus a way to **score** it. The model is deliberately dumb. What matters is the setup, because every better model will plug into it.
+1. **This post:** the smallest *complete* system: we feed the text in, a simple model that learns, and generates text, and a way to **score** it. Our model is deliberately dumb. What matters is the setup.
 2. **The posts after this:** one new idea per post, each one adding a row to a **scoreboard** that goes from random gibberish to something that actually reads like text. I'm starting with Shakespeare, like Andrej, so my numbers can be checked against his. The end goal is a model that learns from and writes **Indian text**. (Which datasets should I try? Tell me in the comments :P)
 
 ---
@@ -23,7 +23,7 @@ That's really the whole trick. Predict the next token, add it to the text, and a
 
 *Made-up probabilities, but the loop is real: guess the next word, pick one, append it, repeat.*
 
-The name isn't just branding, each word actually means something:
+Lets break down each word in a LLM:
 
 **Large:** everything about these models is huge.
 
@@ -100,7 +100,7 @@ If you've followed along so far, the next steps are fairly obvious. To build thi
 5. **Evaluate** how good the model is.
 6. **Generate** new text by rolling dice with those probabilities. Yay!
 
-In code, each step is its own small brick, like Lego:
+[Our Lego pieces : add a visualization for this]
 
 ```
  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐
@@ -132,12 +132,41 @@ Our random writer from earlier picks every character with the same 1-in-65 chanc
 So how would *you* guess the next character, if all you had was Shakespeare and a pencil?
 
 **Attempt 1: guess the most common character.**
-Count every character in the text. Space shows up 15% of the time and `e` 8.5%, while `z` and `X` almost never do. A machine that rolls dice weighted by these counts would already write something that *looks* more like text: lots of spaces, lots of e's.
+Count every character in the text. Space shows up 15% of the time and `e` 8.5%, while `z` and `X` almost never do. What if our machine rolls dice weighted by these counts? Let's try it:
 
-But it's blind. Ask it what comes after `q`, and it still says "probably a space, maybe an `e`".
+```python
+# slightly less dumb: common characters get picked more often
+char_counts = Counter(text)
+chars, counts = list(char_counts.keys()), list(char_counts.values())
+print("".join(random.choices(chars, weights=counts, k=200)))
+```
+
+It writes:
+
+```
+pfeotmehL D dWsmeraee,hamonbh a'n  rfporedpac  n'h hwnhohod. Tffhr
+unv,
+uyeoo rsrtm ;mloewlIeutcereawy :potake hcetna iwd gohl  nedtmh ,ra k foetA
+```
+
+Still gibberish, but it *looks* more like text. Compare it with the random writer:
+
+| | Random writer | Weighted by counts |
+| --- | --- | --- |
+| Spaces | 0.6% | 12% |
+| `e` | 2.5% | 8.5% |
+| Rare stuff (`z`, `X`, `$`, `&`) | 5.6% | 0% |
+
+
 
 **Attempt 2: look at what came just before.**
-Here's the trick. In our Shakespeare text, `q` is followed by `u`... all 609 times. After `t`, `h` is the top pick (hello, "the"). The character you're on tells you a *lot* about the next one.
+One key observation: context matters a lot in guessing what comes next. Try it yourself, what's the blank in "afte_"? You didn't need a dice roll for that, right? :P
+
+But how do we embed this observation into our model?
+
+Answer: rather than guessing over the entire text, what if we only guess what's likely to come after the *current* character? Let's start small, with just one character of context.
+
+For example, in our Shakespeare text, `q` is followed by `u`... all 609 times. After `t`, `h` is the top pick (hello, "the"). The character you're on tells you a lot about the next one.
 
 So instead of one big tally, we keep **one tally per character**: "what usually comes after `a`?", "what usually comes after `b`?", and so on.
 
