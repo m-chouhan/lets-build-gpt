@@ -11,7 +11,7 @@ def estimate_loss(model, data, cfg) -> float:
     losses = []
     for _ in range(cfg.eval_iters):
         x, y = get_batch(data, cfg.batch_size, cfg.block_size)
-        _, loss = model.forward(x, y)
+        loss = model.loss(x, y)
         losses.append(loss.item())
     return sum(losses) / len(losses)
 

@@ -15,7 +15,8 @@ class LanguageModel:
         """(B, T) token ids -> (B, T, vocab_size) scores for the next token."""
         raise NotImplementedError
 
-    def forward(self, idx: torch.Tensor, targets: torch.Tensor):
+    def loss(self, idx: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """Average surprise at the real next tokens (lower is better)."""
         logits = self.logits(idx)
         # cross-entropy = average surprise at the real next token:
         # https://en.wikipedia.org/wiki/Cross-entropy
@@ -25,8 +26,7 @@ class LanguageModel:
         #   loss = (-p.log()).mean()            # surprise, averaged
         # it wants (N, C) and (N,), so flatten batch and time into one dim
         B, T, C = logits.shape
-        loss = F.cross_entropy(logits.view(B * T, C), targets.view(B * T))
-        return logits, loss
+        return F.cross_entropy(logits.view(B * T, C), targets.view(B * T))
 
     @torch.no_grad()
     def generate(self, idx: torch.Tensor, max_new_tokens: int) -> torch.Tensor:

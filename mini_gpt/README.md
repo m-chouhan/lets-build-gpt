@@ -31,7 +31,7 @@ The model we use is a **bigram** model: *predict the next character by looking a
 | `config.py` | knobs | Every knob in one place; each one is also a CLI flag (`--lr 0.01`) |
 | `data.py` | data | `split` (90/10), `get_batch` (random chunks). Text files live in `datasets/` |
 | `tokenizer.py` | tokenizer | `CharTokenizer`: 65 characters ↔ ids 0–64 |
-| `models/base.py` | model contract | `LanguageModel`: shared `forward` (logits + loss) and `generate`. A model only defines `logits(idx)` |
+| `models/base.py` | model contract | `LanguageModel`: shared `loss` (average surprise) and `generate`. A model only defines `logits(idx)` |
 | `models/bigram_counts.py` | level 0 model | `BigramCounts`: a table of counts |
 | `models/bigram_logits.py` | level 1 model | `BigramLogits`: a table of learned logits |
 | `models/__init__.py` | registry | `MODELS = {name: class}`, so a model is picked by name |
@@ -166,7 +166,7 @@ Repeat thousands of times on random pairs. Row `l` drifts to about 50/50 `l`/`o`
 ### The training loop: 4 lines that never change
 
 ```python
-logits, loss = model.forward(xb, yb)   # forward: predict, measure surprise
+loss = model.loss(xb, yb)              # predict, measure surprise
 optimizer.zero_grad()                  # wipe last step's arrows (they pile up otherwise)
 loss.backward()                        # backward: for each knob, which way lowers the loss?
 optimizer.step()                       # turn each knob a little that way
@@ -218,11 +218,11 @@ Yes. Each step is one batch → one round of nudges.
 **Q: Why print the loss every `eval_interval` steps?**
 To see whether the model is getting better or worse over time. The **val** loss is the honest number, since that text is never trained on. Each printed loss is averaged over several batches because a single batch is noisy.
 
-**Q: Doesn't `model.forward` compute the next set of weights from the current ones?**
-❌ No, and this was my main confusion. `forward` only *uses* the current weights to make predictions and measure the loss. It never changes them. The weights change only in `optimizer.step()`.
+**Q: Doesn't `model.loss` compute the next set of weights from the current ones?**
+❌ No, and this was my main confusion. `loss` only *uses* the current weights to make predictions and measure the loss. It never changes them. The weights change only in `optimizer.step()`.
 
 **Q: Then what is `loss.backward()` doing?**
-After `forward`, we know *how wrong* we are (e.g. 4.17), but not *which way* to turn each of the 4,225 knobs. `backward()` answers, for every knob: *"if I nudged you up a tiny bit, would the loss go up or down, and by how much?"* That's the gradient. PyTorch works it out by replaying the forward computation in reverse (the chain rule). Example: if the batch had `h` followed by `e`, the arrow on table[`h`,`e`] says "turn up" and the rest of row `h` says "turn down."
+After `model.loss`, we know *how wrong* we are (e.g. 4.17), but not *which way* to turn each of the 4,225 knobs. `backward()` answers, for every knob: *"if I nudged you up a tiny bit, would the loss go up or down, and by how much?"* That's the gradient. PyTorch works it out by replaying the forward computation in reverse (the chain rule). Example: if the batch had `h` followed by `e`, the arrow on table[`h`,`e`] says "turn up" and the rest of row `h` says "turn down."
 
 **Q: Why `zero_grad()`?**
 PyTorch *adds* new gradients onto old ones by default. We want fresh arrows each step, so we wipe them first.
@@ -258,7 +258,10 @@ Plain-English names (`tally`, `nudge`) watered the idea down, and they described
 It was called "fit" at first. "Fitting a model to data" is the statistics / scikit-learn term (`.fit()`), and it avoided a clash with PyTorch's `optimizer`. But the GPT world (Karpathy, nanoGPT, PyTorch tutorials) says **train**, and a beginner reading the blog already knows that word. So it's now `training.py` with `train_by_counting` (closed-form) vs `train_by_gradient_descent` (iterative). The lesson is the same: counting is training too.
 
 **Q: Why does `BigramCounts` return `log(probs)` as its logits?**
-So every model plugs into the same `forward`, loss and `generate`. softmax(log(p)) = p, so nothing changes for sampling, and the loss numbers are directly comparable across levels.
+So every model plugs into the same `loss` and `generate`. softmax(log(p)) = p, so nothing changes for sampling, and the loss numbers are directly comparable across levels.
+
+**Q: Why `model.loss` and not `model.forward` like Karpathy?**
+It was `forward`, returning `(logits, loss)`. But every caller threw the logits away, and our models aren't `nn.Module`s, so `forward` gave us none of PyTorch's `model(x)` magic. It was just a name that hid what the method does: measure average surprise. `forward` (and the "forward pass") comes back when the neural models do.
 
 **Q: How does `count_pairs` fill the table, and why not a one-liner?**
 It first counts pairs in a plain Python `Counter` (`{(t, h): 2100, ...}`), then copies the ~4k distinct pairs into the table. An earlier version did it in one PyTorch line, `counts.index_put_((current, following), torch.ones(len(current)), accumulate=True)`: about 5× faster (0.01 s vs 0.05 s on 1M pairs), but hard to read, and it needed `accumulate=True` because plain `counts[current, following] += 1` silently counts each repeated pair only once. A plain `for` loop over all 1M pairs is the most obvious version but takes ~1.8 s. `Counter` is the middle ground: nearly as clear as the loop and still effectively instant.
@@ -281,7 +284,7 @@ Because of the fixed seed (`seed = 1337` in `config.py`). Counting always gives 
 
 - A bigram model is just a lookup table of "what usually comes next."
 - Training = predict → measure surprise → compute arrows → nudge. The same 4 lines will train GPT.
-- `forward` doesn't learn; `optimizer.step()` does.
+- `model.loss` doesn't learn; `optimizer.step()` does.
 - For a bigram, counting pairs and gradient-descent training arrive at essentially the same table.
 - Counting is training too: closed-form vs iterative is the real difference between level 0 and level 1.
 - Name things by what they *are*. Keep "what it is" (model) separate from "how it learns" (training method).

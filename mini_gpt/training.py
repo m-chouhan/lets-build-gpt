@@ -25,7 +25,7 @@ def train_by_gradient_descent(model, train_data, val_data, cfg):
             print(f"step {step:5d}: {report(model, train_data, val_data, cfg)}")
 
         x, y = get_batch(train_data, cfg.batch_size, cfg.block_size)
-        _, loss = model.forward(x, y)  # predict and measure; changes nothing
+        loss = model.loss(x, y)  # predict and measure; changes nothing
         optimizer.zero_grad()  # gradients add up by default, so clear last step's
         loss.backward()  # gradient for every parameter: https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
         optimizer.step()  # the only line that changes the parameters

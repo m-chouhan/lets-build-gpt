@@ -138,8 +138,6 @@ Still gibberish, but it *looks* more like text. Compare it with the random write
 | `e` | 2.5% | 8.5% |
 | Rare stuff (`z`, `X`, `$`, `&`) | 5.6% | 0% |
 
-
-
 **Attempt 2: look at what came just before.**  
 One key observation: context matters a lot in guessing what comes next. Try it yourself, what's the blank in "afte_"? You didn't need a dice roll for that, right?
 
@@ -255,11 +253,17 @@ The writing barely changes, but nothing is impossible anymore. By the way, this 
 
 ## How do we know if it's any good?
 
-Since we are playing with the probability of each character, the obvious idea is to check how often the model's top guess is right. But that's a bad measure for language.
+Our model hands out a probability for every possible next character. So how do we grade it?
+
+The obvious idea is to check how often the model's top guess is right. But is that a good measure for language? Think about it for a sec.
 
 After `"th"`, both `e` ("the") and `a` ("that") are fine. A model that says *"e 60%, a 30%"* is doing a good job, but accuracy marks it **wrong** every time the real answer is `a`. Accuracy only counts the top guess and throws away everything else the model said.
 
-So we need a score that looks at the *whole* guess, not just the top pick. Let's build it one step at a time.
+So what else could we measure? Think about what happens in *your* head when you read. After `q` you see `u`, and... nothing happens, you saw it coming. After `q` you see `z`, and you go "huh?". You were **surprised**.
+
+That's a better way to grade the model: show it real text and check how surprised it was. If it predicted the next character well, it wasn't surprised. If its prediction was off, it was surprised, and that means it did poorly on that bit of text.
+
+But how do we calculate surprise? Is that even something we can put a number on? Let's build it one step at a time.
 
 ### Step 1: score a single guess
 
@@ -271,11 +275,22 @@ p = probs[current][following]   # the chance the model gave to the real next cha
 
 Our counted table says that after `t`, the chance of `h` is **34%**. That's a decent guess. If it had said 90%, even better. If it had said 1%, it was badly caught off guard.
 
-So a good model gives **high** probability to what really happens. Now we just need to turn "high probability = good" into a number where **lower is better**, like a penalty.
+So the higher the `p (probability)`, the less surprised the model was. Now we need to turn `p` into a surprise number.
 
 ### Step 2: turn probability into surprise
 
-Here's the penalty everyone uses:
+Before looking at any formula, try filling this in yourself. How surprised *should* the model be?
+
+| The model gave the real next character… | Surprise should be… |
+| --------------------------------------- | ------------------- |
+| 100%                                    | ?                   |
+| 50%                                     | ?                   |
+| 1%                                      | ?                   |
+| 0%                                      | ?                   |
+
+Got a feel for it? At 100% the model was sure and right, so there's no surprise at all: zero. The smaller the chance, the bigger the surprise. And at 0%, the model said "this can't happen", and then it happened. You can't get more surprised than that.
+
+Turns out there's a formula that does exactly this. It's not a new idea, by the way: Claude Shannon worked it out in 1948, when he founded information theory.
 
 ```python
 surprise = -math.log(p)   # natural log
@@ -288,10 +303,12 @@ surprise = -math.log(p)   # natural log
 | 1%                                      | very           | **4.6**  |
 | 0%                                      | infinitely     | **∞**    |
 
-Why `-log` and not something else? This comes from information theory, and I'm going to take it on trust for now. (If you want the real story, StatQuest's [Entropy (for data science) Clearly Explained!!!](https://www.youtube.com/watch?v=YtebGVx-Fxw) builds surprise from scratch, and 3Blue1Brown's [Solving Wordle using information theory](https://www.youtube.com/watch?v=v68zYyaEmEA) shows the same idea through a game.) But you can feel why it's a sensible choice:
+Does it match your table? It ticks every box:
 
 - **Sure and right costs nothing.** 100% → 0.
-- **The less you expected it, the more it hurts.** And it hurts *a lot* near 0%. Saying "this will never happen" and then being wrong is the worst possible mistake. That's why we smoothed the counts: no pair is ever given exactly 0%.
+- **The less you expected it, the more it hurts.** And it hurts *a lot* near 0%. Saying "this will never happen" and then being wrong is the worst possible mistake. Remember the +1 smoothing? This is why it matters: no pair is ever given exactly 0%, so the surprise never hits ∞.
+
+Want to dig into why it's `-log` and not something else? [Information is surprise](https://plus.maths.org/information-surprise) on Plus Magazine is a gentle read. StatQuest's [Entropy (for data science) Clearly Explained!!!](https://www.youtube.com/watch?v=YtebGVx-Fxw) builds surprise from scratch, and 3Blue1Brown's [Solving Wordle using information theory](https://www.youtube.com/watch?v=v68zYyaEmEA) shows the same idea through a game.
 
 ### Step 3: average it over lots of text
 
@@ -341,9 +358,9 @@ p = probs[range(len(targets)), targets]      # Step 1: the chance each real next
 loss = (-p.log()).mean()                     # Steps 2 and 3: surprise, then average
 ```
 
-### Step 4: two anchors
+### Step 4: baselining our losses
 
-A loss number means nothing alone. Is 1.95 good? We need reference points:
+A loss number means nothing alone. We need some reference points to compare it:
 
 - **Perfect:** loss 0. Never achievable, because language is genuinely uncertain. Even Shakespeare couldn't tell you for sure what comes after "th".
 - **Random guessing:** every one of the 65 characters equally likely, so every guess gets 1/65:
@@ -386,7 +403,8 @@ Validation loss is the honest number, so **validation loss is the number that go
 
 ### Step 6: batching, a poll instead of a census
 
-Strictly speaking, the loss is the average surprise over **every** character: about 1 million in the training text and 111,540 in the validation text. That's the exact answer. But that's not quite what our code does. It takes a **poll**.
+to compute the average_surprise, we can compute it our random batches and average them out, instead of the entire dataset. This is done to improve the compute efficiency of our model.  
+ Last key piece here is the idea.
 
 It works like an opinion poll before an election: instead of asking the whole country, you ask a few thousand random people and get very close to the real answer.
 
@@ -410,7 +428,7 @@ def estimate_loss(model, data, cfg):
     losses = []
     for _ in range(cfg.eval_iters):                              # 50 batches
         x, y = get_batch(data, cfg.batch_size, cfg.block_size)   # 32 random chunks of 8
-        _, loss = model.forward(x, y)                            # average surprise on this batch
+        loss = model.loss(x, y)                                  # average surprise on this batch
         losses.append(loss.item())
     return sum(losses) / len(losses)
 ```
