@@ -401,27 +401,13 @@ How to read the two numbers:
 
 Validation loss is the honest number, so **validation loss is the number that goes on the scoreboard.**
 
-### Step 6: batching, a poll instead of a census
+### Step 6: a poll, not a census
 
-to compute the average_surprise, we can compute it our random batches and average them out, instead of the entire dataset. This is done to improve the compute efficiency of our model.  
- Last key piece here is the idea.
+To get the exact loss, we'd score **every** character: about 1 million in the training text and 111,540 in the validation text. Do we really need all of them?
 
-It works like an opinion poll before an election: instead of asking the whole country, you ask a few thousand random people and get very close to the real answer.
+Think of an election poll. Nobody asks the whole country. You ask a few thousand random people and get very close to the real answer.
 
-The `get_batch` brick does the sampling. It cuts out random chunks of text, plus the same chunks shifted one character to the right:
-
-```
-text "hello!", chunk size 4  ->  x = "hell"   (current characters)
-                                 y = "ello"   (what really came next)
-```
-
-Lined up, every position is one guess to score: `h→e`, `e→l`, `l→l`, `l→o`. So a chunk of 8 characters gives 8 guesses.
-
-```python
-x, y = get_batch(val_data, batch_size=32, block_size=8)   # 32 random chunks of 8 characters
-```
-
-One **batch** is 32 chunks × 8 characters = **256 guesses**. The scorecard averages 50 batches, which is **12,800 guesses** in total. Here's the real code from `evaluate.py`:
+Our code does the same. `get_batch` grabs 32 random chunks of 8 characters, and we average 50 of those batches, which is **12,800 guesses** in total:
 
 ```python
 def estimate_loss(model, data, cfg):
@@ -433,13 +419,13 @@ def estimate_loss(model, data, cfg):
     return sum(losses) / len(losses)
 ```
 
-Why not just score everything? For our tiny 65×65 table, scoring every character would be instant. But real LLMs train on *hundreds of billions* of tokens, and scoring all of them every time you want a progress report would cost about as much as the training itself. This is a standard practice for evaluation and benchmarking of any model. 
+For our tiny table, scoring everything would be instant. But real LLMs train on *hundreds of billions* of tokens, and scoring all of them for every progress report would cost about as much as the training itself.
 
-The price of a poll is a little **noise**. I ran the same poll 20 times on the validation text:
+What's the catch? A poll is a little noisy. Here's what I got running the same poll 20 times:
 
 ![20 polls of validation loss vs the exact value](images/loss_polls.png)
 
-Every poll lands between 2.45 and 2.49, around the exact value of 2.482. Good enough to compare models, but it means **a difference in the second decimal place is just noise.** If a future model improves by 0.01, that's not a win.
+Every poll lands between 2.45 and 2.49, around the exact value of 2.482. So **a difference in the second decimal place is just noise**. 
 
 ---
 
@@ -447,9 +433,13 @@ Every poll lands between 2.45 and 2.49, around the exact value of 2.482. Good en
 
 ### Before: an empty table
 
-Before counting, the table is all zeros (plus smoothing), so every character is equally likely. 
+Before counting, the table is all zeros (plus smoothing), so every character is equally likely. Quick quiz before you look: what loss should it get? (Hint: Step 4.)
 
-[add training loss , validation loss for the random one as well]
+```
+training_loss 4.1744  validation_loss 4.1744
+```
+
+Exactly the random-guessing anchor, -log(1/65) = 4.17. An empty table *is* random guessing:
 
 ```
 CpzlYaS ;czde.'wEiT,YVrzlGu-?YeNY
@@ -483,8 +473,8 @@ Now we can read these numbers with everything from the previous section:
 | after counting  | 2.47          | 2.46            | 12 characters       |
 
 - **4.17 → 2.46:** the model went from torn between all 65 characters to torn between about 12. That's a lot of uncertainty removed just by counting.
-- **Training ≈ validation:** no overfitting. 
-- **Validation slightly *lower* than training?** That's the poll noise from Step 6.
+- **Training ≈ validation, so no overfitting.** Why not? Think about it: the model has only 65×65 = 4,225 numbers, and it read a million characters. There's simply no room to memorize the text. All it *can* store is general patterns.
+- **Wait, validation is *lower* than training?** Shouldn't it be the other way around? It is, actually. Scored on every character, training is 2.455 and validation is 2.482. The flip is just the poll noise from Step 6.
 
 ---
 
@@ -501,13 +491,11 @@ From 4.17 to 2.46 just by counting pairs!
 
 ---
 
-## The ceiling
+## How can we do better than this ?
 
-This model has a hard limit: it **only ever sees one character**. After `e`, it can't tell whether it's in `"the "` or `"thee"` or `"here"`. Every `e` gets the same die, forever.
+This model has a hard limit: it **only ever sees one character**. After `e`, it can't tell whether it's in `"the "` or `"thee"` or `"here"`. To look further back we'd need a bigger table: two characters back is 65³ ≈ 275k cells, and eight back is 65⁹ ≈ 21 quadrillion cells. Most of which would be empty. **Counting doesn't scale.**
 
-Counting more text won't fix that. To look further back we'd need a bigger table: two characters back is 65³ ≈ 275k cells, and eight back is 65⁹ ≈ 21 quadrillion cells. Most would never be seen even once. **Counting doesn't scale.**
-
-So the next step is to stop counting and start **learning** the table instead, by trial and error, with a method that doesn't care how big the model gets. That method (gradient descent) is what eventually trains a GPT.
+So the next step is to stop counting and start **learning** the table instead, by trial and error, with a method that doesn't care how big the model gets. That method (gradient descent) is what eventually trains a GPT. 
 
 ---
 
@@ -519,8 +507,6 @@ In this post we built:
 - **The simplest language model:** a 65×65 table of "what usually comes next", trained by just counting.
 - **A scorecard:** the average surprise (cross-entropy), measured on text the model has never seen, with two anchors (4.17 = random, 0 = perfect) and a poll to keep it fast.
 - **Scoreboard v1:** from 4.17 to 2.46.
-
-The model is dumb, but the setup isn't. Every future model plugs into the same pipeline and gets judged by the same scorecard, so every improvement shows up as a new row on the scoreboard.
 
 **Next post:** *Same score, new engine.* We throw away counting, start from a table of zeros, and teach it by nudging, and we'll watch the loss fall step by step.
 
