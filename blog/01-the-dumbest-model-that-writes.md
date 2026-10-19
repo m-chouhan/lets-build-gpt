@@ -416,16 +416,18 @@ validation_loss = average_surprise(probs, val_data)     # how well it does on ne
 
 How to read the two numbers:
 
-- **Both close together:** the model learned patterns that carry over to new text. 👍
+- **Both close together:** the model learned patterns that carry over to new text.
 - **Training loss much lower than validation loss:** the model memorized its training text instead of learning general patterns. That's called **overfitting** (StatQuest: [Bias and Variance](https://www.youtube.com/watch?v=EuBBz3bI-aA)).
-
-Validation loss is the honest number, so **validation loss is the number that goes on the scoreboard.**
 
 ### Step 6: a poll, not a census
 
-To get the exact loss, we'd score **every** character: about 1 million in the training text and 111,540 in the validation text. Do we really need all of them?
+To get the exact loss, we'd have to score **every** character: about 1 million in the training text and 111,540 in the validation text.
 
-Think of an election poll. Nobody asks the whole country. You ask a few thousand random people and get very close to the real answer.
+For our tiny table, scoring everything would be instant. But real LLMs train on *hundreds of billions* of tokens, and scoring all of them for every progress report would cost about as much as the training itself.
+
+Do we really need all of them? Is there a more practical way?
+
+Answer: think of an election poll. Nobody asks the whole country. You ask a few thousand random people and get very close to the real answer.
 
 Our code does the same. `get_batch` grabs 32 random chunks of 8 characters, and we average 50 of those batches, which is **12,800 guesses** in total:
 
@@ -438,8 +440,6 @@ def estimate_loss(model, data, cfg):
         losses.append(loss.item())
     return sum(losses) / len(losses)
 ```
-
-For our tiny table, scoring everything would be instant. But real LLMs train on *hundreds of billions* of tokens, and scoring all of them for every progress report would cost about as much as the training itself.
 
 What's the catch? A poll is a little noisy. Here's what I got running the same poll 20 times:
 
