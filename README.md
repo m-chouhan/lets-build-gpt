@@ -4,7 +4,7 @@ A language model built from scratch, one idea at a time, by someone who isn't co
 
 | Post | Model | Validation loss |
 | --- | --- | --- |
-| [1. Just Count: The Smallest Model That Writes](https://mchouhan.co.in/blogs/lets-build-gpt-01/) | `BigramCounts`: a 65×65 table of pair counts | 2.46 |
+| [Part 01: The Dumbest Model That Writes](https://mchouhan.co.in/blogs/lets-build-gpt-from-scratch-01/) | `BigramCounts`: a 65×65 table of pair counts | 2.46 |
 
 Random guessing scores 4.17. Every post adds a row.
 

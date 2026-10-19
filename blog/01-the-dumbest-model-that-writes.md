@@ -1,4 +1,4 @@
-# Just Count: The Smallest Model That Writes
+# Let's Build GPT From Scratch (Part 01): The Dumbest Model That Writes
 
 *Hello everyone! I recently started exploring how LLMs work, to get a better understanding of a technology that has crept into almost every part of our lives in the last few years. I'm starting this series to document what I learn and share it with the world.*
 
@@ -6,7 +6,7 @@
 
 ## The plan for this series
 
-This is Part 1 of a series where I build a **language model from scratch, one idea at a time**, as someone who isn't comfortable with neural networks yet. I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), split into small levels I can actually understand:
+This is Part 01 of a series where I build a **language model from scratch, one idea at a time**, as someone who isn't comfortable with neural networks yet. I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), split into small levels I can actually understand:
 
 1. **This post:** the smallest *complete* system: load some text, build a simple model that learns from it and writes, and find a way to **score** it. Our model is deliberately dumb. What matters is the setup.
 2. **The posts after this:** one new idea per post, each one adding a row to a **scoreboard** that goes from random gibberish to something that actually reads like text. I'm starting with Shakespeare, like Andrej, so my numbers can be checked against his. The end goal is a model that learns from and writes **Indian text**. (Which datasets should I try? Tell me in the comments :P)
@@ -69,7 +69,7 @@ What could be a better idea?
 
 But how do we calculate those probabilities? How do we know what comes after `_`?
 
-Answer: We learn them from examples. For that we first need a **dataset**: a long piece of real text where we can see which characters tend to follow which. I'm using [Tiny Shakespeare](https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt), which contains about 1.1 million characters of plays:
+Answer: we learn them from examples. For that we first need a **dataset**: a long piece of real text where we can see which characters tend to follow which. I'm using [Tiny Shakespeare](https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt), which contains about 1.1 million characters of plays:
 
 ```
 First Citizen:
@@ -218,7 +218,7 @@ Even this dumb table picked up some real English:
 
 ### What about pairs we never saw?
 
-There's one more problem to solve first. Look at the heatmap again: lots of white squares. Those are pairs that never showed up in the training text, so the model gives them **0%**. i.e. not "unlikely" but *impossible*.
+There's one more problem to solve first. Look at the heatmap again: lots of white squares. Those are pairs that never showed up in the training text, so the model gives them **0%**: not "unlikely" but *impossible*.
 
 | Pairs | Count |
 | --- | --- |
@@ -249,7 +249,7 @@ probs = (counts + 1) / (counts + 1).sum(dim=1, keepdim=True)   # +1 = smoothing
 | Never-seen pairs in 2,000 generated characters | 0 | 4 (`Cp`, `YE`, `wx`, `OI`) |
 | Chance of `d` → `t` | **0%** (impossible) | 0.0035% (rare, but possible) |
 
-The writing barely changes, but nothing is impossible anymore. By the way, this +1 trick isn't special to language models. It shows up anywhere we estimate chances by counting, 3Blue1Brown's [video](https://www.youtube.com/watch?v=8idr1WZ1A7Q) explains it beautifully.
+The writing barely changes, but nothing is impossible anymore. By the way, this +1 trick isn't special to language models. It shows up anywhere we estimate chances by counting; 3Blue1Brown's [video](https://www.youtube.com/watch?v=8idr1WZ1A7Q) explains it beautifully.
 
 ---
 
@@ -370,7 +370,7 @@ loss = (-p.log()).mean()                     # Steps 2 and 3: surprise, then ave
 
 ### Step 4: what's a good number?
 
-A loss number means nothing alone. We need some reference points to compare it:
+A loss number means nothing alone. We need some reference points to compare it against:
 
 - **Perfect:** loss 0. Never achievable, because language is genuinely uncertain. Even Shakespeare couldn't tell you for sure what comes after "th".
 - **Random guessing:** every one of the 65 characters equally likely, so every guess gets 1/65:
