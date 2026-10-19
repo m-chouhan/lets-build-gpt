@@ -145,7 +145,7 @@ One key observation: context matters a lot in guessing what comes next. Try it y
 
 But how do we embed this observation into our model?
 
-Answer: rather than guessing over the entire text, what if we only guess what's likely to come after the *current* character? (i.e, what if we start with just one character of context?).
+Answer: rather than guessing over the entire text, what if we only guess what's likely to come after the *current* character? (i.e. what if we start with just one character of context?)
 
 For example, in our Shakespeare text, `q` is followed by `u`... all 609 times. After `t`, `h` is the top pick (hello, "the"). The character you're on tells you a lot about the next one.
 
@@ -216,9 +216,9 @@ Even this dumb table picked up some real English:
 | `y` | space | 50% | Lots of words end in y |
 | `d` | space | 45% | Lots of words end in d |
 
-### What about pairs we never saw ?
+### What about pairs we never saw?
 
-There's one more problem to solve first. Look at the heatmap again: lots of white squares. Those are pairs that never showed up in the training text, so the model gives them **0%**. i.e Not "unlikely" but *Impossible instead*.
+There's one more problem to solve first. Look at the heatmap again: lots of white squares. Those are pairs that never showed up in the training text, so the model gives them **0%**. i.e. not "unlikely" but *impossible*.
 
 | Pairs | Count |
 | --- | --- |
@@ -235,7 +235,7 @@ And those 187 aren't weird typos. They're real words:
 | `fn` | "would cure dea**fn**ess" |
 | `z!` | "should--buz**z!**" |
 
-And Our model is 100% sure nobody could ever write "spendthrift" !
+And our model is 100% sure nobody could ever write "spendthrift"!
 
 The fix is **smoothing**: pretend every pair was seen **once** extra before counting. This ensures even unseen pairs get a tiny chance instead of zero:
 
@@ -249,11 +249,7 @@ probs = (counts + 1) / (counts + 1).sum(dim=1, keepdim=True)   # +1 = smoothing
 | Never-seen pairs in 2,000 generated characters | 0 | 4 (`Cp`, `YE`, `wx`, `OI`) |
 | Chance of `d` → `t` | **0%** (impossible) | 0.0035% (rare, but possible) |
 
-The writing barely changes, but nothing is impossible anymore. By the way This +1 trick isn't special to language models. It shows up anywhere we estimate chances by counting, 3Blue1Brown's [https://www.youtube.com/watch?v=8idr1WZ1A7Q explains it](https://www.youtube.com/watch?v=8idr1WZ1A7Q) beautifully.
-
-|     |     |
-| --- | --- |
-|     |     |
+The writing barely changes, but nothing is impossible anymore. By the way, this +1 trick isn't special to language models. It shows up anywhere we estimate chances by counting, 3Blue1Brown's [video](https://www.youtube.com/watch?v=8idr1WZ1A7Q) explains it beautifully.
 
 ---
 
