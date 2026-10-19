@@ -81,6 +81,7 @@ cat datasets/shakespeare.txt | wc
 
 Once we have the probabilities, writing is the same loop as the LLM animation above, just one character at a time:
 
+<!-- interactive: make the GIF playable: readers roll the dice for the next character, or click a bar to pick it, and watch the text grow -->
 ![Predicting the next character, one step at a time](images/char_prediction.gif)
 
 *Real probabilities this time, from the model we build in this post. It only looks at the last character, which is why "hear me sp" turns into "hear me spear" instead of "speak". The picks are dice rolls, so it doesn't always take the tallest bar.*
@@ -140,6 +141,8 @@ Still gibberish, but it *looks* more like text. Compare it with the random write
 
 **Attempt 2: look at what came just before.**  
 One key observation: context matters a lot in guessing what comes next. Try it yourself, what's the blank in "afte_"? 
+
+<!-- interactive: readers fill the afte_ blank and see the one-character model's guess, then can play 10 rounds against it on held-out lines -->
 
 You didn't need a dice roll for that, right?
 
@@ -324,6 +327,7 @@ Does it match your table? It ticks every box:
 
 One guess tells us little. So walk through real text and score **every** character, then take the average. Here's our model reading `" the king"`:
 
+<!-- interactive: the same table, but readers type their own text and see where the model gets surprised -->
 | Current → next | Chance the model gave | Surprise |
 | -------------- | --------------------- | -------- |
 | `␣` → `t`      | 14.1%                 | 1.96     |
@@ -469,6 +473,7 @@ Lzzj$KUKS-A.U FisVJiG HT,OP;W;,qe$zOAnsz-imHzPAkfEfYSgS;RTNBE:myOzk.
 final: training_loss 2.4702  validation_loss 2.4599
 ```
 
+<!-- interactive: readers generate fresh text from the counted table, or from the empty one for contrast -->
 ```
 Hanthniler pr e bla? br s rer?
 onto y wha the ow, out r iloreatt s, te britemingoree ge.'setharme thex?
