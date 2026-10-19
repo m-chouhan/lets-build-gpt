@@ -125,25 +125,42 @@ Most of these bricks are plumbing. The interesting one is the model, so let's st
 
 ---
 
-## How do we make the machine learn human language?
+## What's the simplest idea that could possibly work?
 
-Here's the simplest possible predictor: **look at the current character only, and guess the next one based on what usually followed it.** This is called a **bigram** model ("bi" = two: the current character and the next).
+Our random writer from earlier picks every character with the same 1-in-65 chance. That's why it writes `B$WSPEA;p&$…`. It knows nothing about the text.
 
-As a formula:
+So how would *you* guess the next character, if all you had was Shakespeare and a pencil?
 
-```
-P(next | current) = count(current, next) / count(current)
-```
+**Attempt 1: guess the most common character.**
+Count every character in the text. Space shows up 15% of the time and `e` 8.5%, while `z` and `X` almost never do. A machine that rolls dice weighted by these counts would already write something that *looks* more like text: lots of spaces, lots of e's.
 
-In words: out of all the times we saw `current`, how often was it followed by `next`?
+But it's blind. Ask it what comes after `q`, and it still says "probably a space, maybe an `e`".
 
-Take a tiny alphabet `{h, e, l, o}` and the training text `hello`. Every pair of neighbours is an example:
+**Attempt 2: look at what came just before.**
+Here's the trick. In our Shakespeare text, `q` is followed by `u`... all 609 times. After `t`, `h` is the top pick (hello, "the"). The character you're on tells you a *lot* about the next one.
+
+So instead of one big tally, we keep **one tally per character**: "what usually comes after `a`?", "what usually comes after `b`?", and so on.
+
+**Why stop at one character?**
+Fair question. Two characters of memory would be smarter (`th` → `e` is a strong bet). But the table grows fast:
+
+| Look back | Table size |
+| --- | --- |
+| 1 character | 65 × 65 = **4,225** |
+| 2 characters | 65 × 65 × 65 = 274,625 |
+| 3 characters | 65⁴ = 17,850,625 |
+
+And most of those rows would be empty, because the text simply doesn't contain most combinations. So let's start with the smallest one.
+
+So here's our model: **look only at the current character, and guess the next one based on what usually followed it.** It's called a **bigram** model ("bi" = two: the current character and the next).
+
+Let's dry run this. A tiny alphabet `{h, e, l, o}` and the training text `hello`. Every pair of neighbours is one example:
 
 ```
 h→e   e→l   l→l   l→o
 ```
 
-Tally them into a table. Each row is the current letter, and each column is what came next:
+Tally them into a table. Each row is the current letter, each column is what came next:
 
 ```
               next letter
@@ -154,15 +171,19 @@ current  h [ 0   1   0   0 ]
          o [ 0   0   0   0 ]
 ```
 
-Divide each row by its total and you get **probabilities**. Row `l` becomes 50% `l`, 50% `o`.
+Divide each row by its total and we get... **probabilities**! Row `l` becomes 50% `l`, 50% `o`. That's all this formula says:
 
-To **generate**, look up the current letter's row and roll a die weighted by it:
+```
+P(next | current) = count(current, next) / count(current)
+```
+
+Now to **generate**, look up the current letter's row and roll a die weighted by it:
 
 ```
 start 'h' → always 'e' → always 'l' → 50% 'l' / 50% 'o' 🎲
 ```
 
-That's the whole model. For Shakespeare it's a 65×65 table, and filling it in takes one pass over the text:
+That's it! For Shakespeare it's a 65×65 table, filled in with one pass over the text. No training loop, no gradients. **Just count.**
 
 ```python
 # line the text up against itself shifted by one: "First" -> (F,i) (i,r) (r,s) (s,t)
@@ -170,15 +191,13 @@ current, following = data[:-1].tolist(), data[1:].tolist()
 pair_counts = Counter(zip(current, following))
 ```
 
-No training loop, no gradients. **Just count.**
-
-Here's the actual trained table, zoomed in on space and lowercase letters:
+Here's the real table, zoomed in on space and lowercase letters:
 
 ![Heatmap of the bigram probability table](images/bigram_heatmap.png)
 
 *Each row is one die. Darker = more likely next character. (Rows don't add to 100% here because uppercase and punctuation are cropped out.)*
 
-Even this dumb table has picked up some real English:
+Even this dumb table picked up some real English:
 
 | After… | Top guess for next | How often | Why |
 | --- | --- | --- | --- |
@@ -189,32 +208,54 @@ Even this dumb table has picked up some real English:
 
 ### One problem: pairs we never saw
 
-Most possible pairs never show up in the training text:
+There's one more problem to solve first. Look at the heatmap again: lots of white squares. Those are pairs that never showed up in the training text, so the model gives them **0%**. Not "unlikely". *Impossible*.
 
 | Pairs | Count |
 | --- | --- |
 | Possible pairs (65 × 65) | 4,225 |
 | Seen in the training text | 1,380 |
 | Never seen, so the model gives them **0%** | 2,845 |
-| Pairs in the locked-away validation text that never appeared in training | **187** (e.g. `dt`, `fn`, `z!`) |
+| Pairs in the locked-away 10% that never appeared in training | **187** |
 
-That last row is the trouble. To the model, those 187 pairs are *impossible*. When we score it later, one impossible event is enough to make the score infinitely bad.
+And those 187 aren't weird typos. They're real words:
 
-The fix is called **smoothing**: pretend every pair was seen **once** extra before counting. Unseen pairs now get a tiny chance instead of zero:
+| Pair | Where it shows up in the locked-away text |
+| --- | --- |
+| `dt` | "what a spen**dt**hrift is he" |
+| `fn` | "would cure dea**fn**ess" |
+| `z!` | "should--buz**z!**" |
+
+Our model is 100% sure nobody could ever write "spendthrift". When we score it later, that kind of overconfidence costs it *infinitely*.
+
+The fix is **smoothing**: pretend every pair was seen **once** extra before counting. Unseen pairs get a tiny chance instead of zero:
 
 ```python
 probs = (counts + 1) / (counts + 1).sum(dim=1, keepdim=True)   # +1 = smoothing
 ```
 
-Here's the same model, with the same dice rolls, with and without it:
+Same model, same dice rolls, with and without it:
 
 | | Without smoothing | With smoothing |
 | --- | --- | --- |
 | Generated text | `Cars an tcede.` `Y in, lanoul-see waindonse…` | `Cprs an tcede.` `YEin, lanoul-see waindonse…` |
 | Never-seen pairs in 2,000 generated characters | 0 | 4 (`Cp`, `YE`, `wx`, `OI`) |
-| Validation loss | **∞** | **2.48** |
+| Chance of `d` → `t` | **0%** (impossible) | 0.0035% (rare, but possible) |
 
-The writing barely changes, but the score goes from **∞** to **2.48**. We'll see exactly why in the next section.
+The writing barely changes, but nothing is impossible anymore.
+
+This +1 trick isn't special to language models. It shows up anywhere we estimate chances by counting:
+
+| Where | The zero problem | The +1 fix |
+| --- | --- | --- |
+| Online reviews | A seller with 10 out of 10 good reviews isn't "100% perfect" | Add one good and one bad review before doing the math |
+| Spam filters | A word never seen in spam would make a spam email look 0% spam | Add one to every word's count |
+| Our bigram | `dt` never seen, so "spendthrift" is impossible | Add one to every pair's count |
+
+If you want to go deeper:
+
+- 3Blue1Brown, [Binomial distributions | Probabilities of probabilities](https://www.youtube.com/watch?v=8idr1WZ1A7Q): the online reviews version, beautifully explained.
+- StatQuest, [Naive Bayes, Clearly Explained!!!](https://www.youtube.com/watch?v=O2L2Uv9pdDA): the spam filter version.
+- Andrej Karpathy, [The spelled-out intro to language modeling: building makemore](https://www.youtube.com/watch?v=PaCmpygFfXo): our exact bigram model and the same +1, coded live.
 
 ---
 
