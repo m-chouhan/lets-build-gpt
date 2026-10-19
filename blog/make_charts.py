@@ -104,7 +104,7 @@ def bigram_heatmap():
     bar.ax.set_yticklabels(["0%", "10%", "20%", "30%", "40%", "≥50%"], color=TEXT_MUTED)
     bar.outline.set_visible(False)
 
-    fig.suptitle("The whole model: one row = one dice to roll", x=0.06, ha="left", color=TEXT, fontsize=13)
+    fig.suptitle("The whole model: one row = one die to roll", x=0.06, ha="left", color=TEXT, fontsize=13)
     fig.tight_layout()
     fig.savefig(IMAGES / "bigram_heatmap.png", dpi=200)
 
@@ -241,7 +241,7 @@ BRICKS = [
     ("tokenizer", "text \u2194 ids:  \"hi\" \u2192 [46, 47]", "#fe8a18"),
     ("split", "90% for learning, 10% locked away", "#f2cd37"),
     ("train", "count every pair \u2192 65\u00d765 table", "#0055bf"),
-    ("evaluate", "score it on the locked-away 10%", "#237841"),
+    ("evaluate", "score on training + the locked-away 10%", "#237841"),
     ("generate", "roll dice \u2192 new text", "#81007b"),
 ]
 

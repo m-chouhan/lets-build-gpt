@@ -8,14 +8,14 @@
 
 This is Part 1 of a series where I build a **language model from scratch, one idea at a time**, as someone who isn't comfortable with neural networks yet. I'm following Andrej Karpathy's ["Let's build GPT"](https://www.youtube.com/watch?v=kCc8FmEb1nY), split into small levels I can actually understand:
 
-1. **This post:** the smallest *complete* system: we feed the text in, a simple model that learns, and generates text, and a way to **score** it. Our model is deliberately dumb. What matters is the setup.
+1. **This post:** the smallest *complete* system: load some text, build a simple model that learns from it and writes, and find a way to **score** it. Our model is deliberately dumb. What matters is the setup.
 2. **The posts after this:** one new idea per post, each one adding a row to a **scoreboard** that goes from random gibberish to something that actually reads like text. I'm starting with Shakespeare, like Andrej, so my numbers can be checked against his. The end goal is a model that learns from and writes **Indian text**. (Which datasets should I try? Tell me in the comments :P)
 
 ---
 
 ## What is an LLM?
 
-LLM stands for **Large Language Model**. It's a sophisticated piece of tech that **predicts the next word** (more precisely, the next *token*) in a language it was trained on.
+LLM stands for **Large Language Model**. It's a program that **predicts the next word** (more precisely, the next *token*) in a language it was trained on.
 
 That's really the whole trick. Predict the next token, add it to the text, and ask again. Do that in a loop and the model *writes*:
 
@@ -23,7 +23,7 @@ That's really the whole trick. Predict the next token, add it to the text, and a
 
 *Made-up probabilities, but the loop is real: guess the next word, pick one, append it, repeat.*
 
-Lets break down each word in a LLM:
+Let's break down each word in LLM:
 
 **Large:** everything about these models is huge.
 
@@ -47,7 +47,7 @@ Hmm, the simplest way: ask the machine to pick random characters, one after anot
 
 ```python
 # an extremely dumb machine that writes, hehe..
-chars = sorted(set(text))  # the 65 different characters in english
+chars = sorted(set(text))  # every distinct character in our text (65 for Shakespeare)
 for i in range(200):
     print(random.choice(chars), end="")
 ```
@@ -69,7 +69,7 @@ What could be a better idea?
 
 But how do we calculate those probabilities? How do we know what comes after `_`?
 
-Answer : We learn them from examples. For that we first need a **dataset**: a long piece of real text where we can see which characters tend to follow which. I'm using [Tiny Shakespeare](https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt), which contains about 1.1 million characters of plays:
+Answer: We learn them from examples. For that we first need a **dataset**: a long piece of real text where we can see which characters tend to follow which. I'm using [Tiny Shakespeare](https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt), which contains about 1.1 million characters of plays:
 
 ```
 First Citizen:
@@ -112,7 +112,7 @@ Our random writer from earlier picks every character with the same 1-in-65 chanc
 
 So how would *you* guess the next character, if all you had was Shakespeare and a pencil?
 
-**Attempt 1: guess the most common character.**
+**Attempt 1: guess the most common character.**  
 Count every character in the text. Space shows up 15% of the time and `e` 8.5%, while `z` and `X` almost never do. What if our machine rolls dice weighted by these counts? Let's try it:
 
 ```python
@@ -139,7 +139,9 @@ Still gibberish, but it *looks* more like text. Compare it with the random write
 | Rare stuff (`z`, `X`, `$`, `&`) | 5.6% | 0% |
 
 **Attempt 2: look at what came just before.**  
-One key observation: context matters a lot in guessing what comes next. Try it yourself, what's the blank in "afte_"? You didn't need a dice roll for that, right?
+One key observation: context matters a lot in guessing what comes next. Try it yourself, what's the blank in "afte_"? 
+
+You didn't need a dice roll for that, right?
 
 But how do we embed this observation into our model?
 
@@ -149,7 +151,7 @@ For example, in our Shakespeare text, `q` is followed by `u`... all 609 times. A
 
 So instead of one big tally, we keep **one tally per character**: "what usually comes after `a`?", "what usually comes after `b`?", and so on.
 
-**Why stop at one character?**
+**Why stop at one character?**  
 Fair question. Two characters of memory would be smarter (`th` → `e` is a strong bet). But the table grows fast:
 
 | Look back | Table size |
@@ -275,7 +277,7 @@ p = probs[current][following]   # the chance the model gave to the real next cha
 
 Our counted table says that after `t`, the chance of `h` is **34%**. That's a decent guess. If it had said 90%, even better. If it had said 1%, it was badly caught off guard.
 
-So the higher the `p (probability)`, the less surprised the model was. Now we need to turn `p` into a surprise number.
+In other words, So the higher the '`p` '(probability), the less surprised the model was. hmm,
 
 ### Step 2: turn probability into surprise
 
@@ -308,7 +310,15 @@ Does it match your table? It ticks every box:
 - **Sure and right costs nothing.** 100% → 0.
 - **The less you expected it, the more it hurts.** And it hurts *a lot* near 0%. Saying "this will never happen" and then being wrong is the worst possible mistake. Remember the +1 smoothing? This is why it matters: no pair is ever given exactly 0%, so the surprise never hits ∞.
 
-Want to dig into why it's `-log` and not something else? [Information is surprise](https://plus.maths.org/information-surprise) on Plus Magazine is a gentle read. StatQuest's [Entropy (for data science) Clearly Explained!!!](https://www.youtube.com/watch?v=YtebGVx-Fxw) builds surprise from scratch, and 3Blue1Brown's [Solving Wordle using information theory](https://www.youtube.com/watch?v=v68zYyaEmEA) shows the same idea through a game.
+> **🐇 Rabbit hole: why** `-log`**, of all things?**
+>
+> Flip a coin and get heads: that's a 50% event, surprise `-log(0.5)` = 0.69. Flip again, heads again. How surprised should you be by *two* heads in a row?
+>
+> It feels like it should be one surprise plus another: 0.69 + 0.69 = 1.39. Now check: two heads is a 25% event, and `-log(0.25)` = **1.39**. The surprises just add up!
+>
+> That's the whole reason for the log: probabilities *multiply* (50% × 50% = 25%), but surprise should *add*, and log is the function that turns multiplying into adding. Shannon's insight, in one coin flip.
+>
+> Go deeper: [Information is surprise](https://plus.maths.org/information-surprise) on Plus Magazine is a gentle read. StatQuest's [Entropy (for data science) Clearly Explained!!!](https://www.youtube.com/watch?v=YtebGVx-Fxw) builds surprise from scratch, and 3Blue1Brown's [Solving Wordle using information theory](https://www.youtube.com/watch?v=v68zYyaEmEA) shows the same idea through a game.
 
 ### Step 3: average it over lots of text
 
@@ -358,7 +368,7 @@ p = probs[range(len(targets)), targets]      # Step 1: the chance each real next
 loss = (-p.log()).mean()                     # Steps 2 and 3: surprise, then average
 ```
 
-### Step 4: baselining our losses
+### Step 4: what's a good number?
 
 A loss number means nothing alone. We need some reference points to compare it:
 
@@ -371,7 +381,14 @@ A loss number means nothing alone. We need some reference points to compare it:
   **This is the bar every model must clear.** Anything near 4.17 has learned nothing.
 
 [this is food for thought section idea -> we need a short sections like this to encourage users to think more deeply or in a alternative fasion or to challenge their understanding with wisdom nuggets, we can expand this a bit more with some visualization if needed, here the insight is, the lower the characters or tokens the model is torn between, the better the outcome.]  
-Note: Here's a handy way to feel a loss number: `e^loss` tells you roughly how many characters the model is "torn between". Random guessing is e^4.17 = **65**, torn between everything. A loss of 2.46 is e^2.46 ≈ **12**. Same alphabet, but now it's like choosing among 12 instead of 65.
+
+> **🐇 Rabbit hole: what does a loss number actually *feel* like?**
+>
+> Loss numbers are hard to feel. Here's a trick: `e^loss` tells you roughly how many characters the model is "torn between".
+>
+> Try it: random guessing is `e^4.17` = **65**, torn between everything. A loss of 2.46 is `e^2.46` ≈ **12**. Same alphabet, but now it's like choosing among 12 instead of 65. What would a loss of 0.69 mean? (`e^0.69` = 2: a coin flip between two characters.)
+>
+> So every drop in loss shrinks the model's "shortlist". Keep an eye on this number as the series goes on.
 
 ### Step 5: training vs validation, the honesty check
 
@@ -389,6 +406,7 @@ Only `train_data` ever changes the model. Then we score it on **both** parts, us
 
 ```python
 model.count_pairs(train_data)   # learn: only from the training text
+probs = model.log_probs.exp()   # the counted table, as probabilities
 
 training_loss   = average_surprise(probs, train_data)   # how well it fits what it studied
 validation_loss = average_surprise(probs, val_data)     # how well it does on new text
@@ -429,7 +447,7 @@ Every poll lands between 2.45 and 2.49, around the exact value of 2.482. So **a 
 
 ---
 
-## Results
+## So... did it work?
 
 ### Before: an empty table
 
@@ -491,7 +509,7 @@ From 4.17 to 2.46 just by counting pairs!
 
 ---
 
-## How can we do better than this ?
+## How can we do better than this?
 
 This model has a hard limit: it **only ever sees one character**. After `e`, it can't tell whether it's in `"the "` or `"thee"` or `"here"`. To look further back we'd need a bigger table: two characters back is 65³ ≈ 275k cells, and eight back is 65⁹ ≈ 21 quadrillion cells. Most of which would be empty. **Counting doesn't scale.**
 
@@ -505,7 +523,7 @@ In this post we built:
 
 - **A pipeline:** load data → tokenizer → training / validation split → train → evaluate → generate.
 - **The simplest language model:** a 65×65 table of "what usually comes next", trained by just counting.
-- **A scorecard:** the average surprise (cross-entropy), measured on text the model has never seen, with two anchors (4.17 = random, 0 = perfect) and a poll to keep it fast.
+- **A way to score it:** the average surprise (cross-entropy), measured on text the model has never seen, with two anchors (4.17 = random, 0 = perfect) and a poll to keep it fast.
 - **Scoreboard v1:** from 4.17 to 2.46.
 
 **Next post:** *Same score, new engine.* We throw away counting, start from a table of zeros, and teach it by nudging, and we'll watch the loss fall step by step.
