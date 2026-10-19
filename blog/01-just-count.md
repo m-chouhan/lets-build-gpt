@@ -100,28 +100,9 @@ If you've followed along so far, the next steps are fairly obvious. To build thi
 5. **Evaluate** how good the model is.
 6. **Generate** new text by rolling dice with those probabilities. Yay!
 
-[Our Lego pieces : add a visualization for this]
+![Our Lego pieces: load data, tokenizer, split, train, evaluate, generate](images/lego_bricks.png)
 
-```
- ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐
- │ load data  │ → │ tokenizer  │ → │ training / │ → │   train    │ → │  evaluate  │ → │  generate  │
- │ .txt file  │   │ text ↔ ids │   │ validation │   │ the model  │   │   (score)  │   │    text    │
- │            │   │            │   │   split    │   │  (count)   │   │            │   │            │
- └────────────┘   └────────────┘   └────────────┘   └────────────┘   └────────────┘   └────────────┘
-```
-
-| Brick | What it does in this post |
-| --- | --- |
-| **Load data** | Reads `datasets/shakespeare.txt`. Swap the file and you change what the model learns. |
-| **Tokenizer** | The text uses 65 distinct characters, so each gets an id from 0 to 64: `"hi"` → `[46, 47]`. |
-| **Training / validation split** | The first 90% is for learning. The last 10% is **locked away** for testing. |
-| **Train the model** | The model is a *tensor*, a fancy name for a grid of numbers. Here it's 65×65, one row per character, and counting fills it in. |
-| **Evaluate** | Scores the model on the locked-away 10%. *How* to score it turns out to be the trickiest question in this post. We'll get there. |
-| **Generate** | Rolls dice using the model's probabilities to write new text. |
-
-Why bricks? Because in the posts that follow, only the **model** and its **training** change. Everything else stays the same, including the scorecard, so every new model is judged in exactly the same way.
-
-Most of these bricks are plumbing. The interesting one is the model, so let's start there.
+*Our Lego pieces, stacked from the bottom up: each step builds on the one below.* 
 
 ---
 
@@ -159,12 +140,12 @@ Still gibberish, but it *looks* more like text. Compare it with the random write
 
 
 
-**Attempt 2: look at what came just before.**
-One key observation: context matters a lot in guessing what comes next. Try it yourself, what's the blank in "afte_"? You didn't need a dice roll for that, right? :P
+**Attempt 2: look at what came just before.**  
+One key observation: context matters a lot in guessing what comes next. Try it yourself, what's the blank in "afte_"? You didn't need a dice roll for that, right?
 
 But how do we embed this observation into our model?
 
-Answer: rather than guessing over the entire text, what if we only guess what's likely to come after the *current* character? Let's start small, with just one character of context.
+Answer: rather than guessing over the entire text, what if we only guess what's likely to come after the *current* character? (i.e, what if we start with just one character of context?).
 
 For example, in our Shakespeare text, `q` is followed by `u`... all 609 times. After `t`, `h` is the top pick (hello, "the"). The character you're on tells you a lot about the next one.
 
@@ -235,9 +216,9 @@ Even this dumb table picked up some real English:
 | `y` | space | 50% | Lots of words end in y |
 | `d` | space | 45% | Lots of words end in d |
 
-### One problem: pairs we never saw
+### What about pairs we never saw ?
 
-There's one more problem to solve first. Look at the heatmap again: lots of white squares. Those are pairs that never showed up in the training text, so the model gives them **0%**. Not "unlikely". *Impossible*.
+There's one more problem to solve first. Look at the heatmap again: lots of white squares. Those are pairs that never showed up in the training text, so the model gives them **0%**. i.e Not "unlikely" but *Impossible instead*.
 
 | Pairs | Count |
 | --- | --- |
@@ -254,15 +235,13 @@ And those 187 aren't weird typos. They're real words:
 | `fn` | "would cure dea**fn**ess" |
 | `z!` | "should--buz**z!**" |
 
-Our model is 100% sure nobody could ever write "spendthrift". When we score it later, that kind of overconfidence costs it *infinitely*.
+And Our model is 100% sure nobody could ever write "spendthrift" !
 
-The fix is **smoothing**: pretend every pair was seen **once** extra before counting. Unseen pairs get a tiny chance instead of zero:
+The fix is **smoothing**: pretend every pair was seen **once** extra before counting. This ensures even unseen pairs get a tiny chance instead of zero:
 
 ```python
 probs = (counts + 1) / (counts + 1).sum(dim=1, keepdim=True)   # +1 = smoothing
 ```
-
-Same model, same dice rolls, with and without it:
 
 | | Without smoothing | With smoothing |
 | --- | --- | --- |
@@ -270,21 +249,11 @@ Same model, same dice rolls, with and without it:
 | Never-seen pairs in 2,000 generated characters | 0 | 4 (`Cp`, `YE`, `wx`, `OI`) |
 | Chance of `d` → `t` | **0%** (impossible) | 0.0035% (rare, but possible) |
 
-The writing barely changes, but nothing is impossible anymore.
+The writing barely changes, but nothing is impossible anymore. By the way This +1 trick isn't special to language models. It shows up anywhere we estimate chances by counting, 3Blue1Brown's [https://www.youtube.com/watch?v=8idr1WZ1A7Q explains it](https://www.youtube.com/watch?v=8idr1WZ1A7Q) beautifully.
 
-This +1 trick isn't special to language models. It shows up anywhere we estimate chances by counting:
-
-| Where | The zero problem | The +1 fix |
-| --- | --- | --- |
-| Online reviews | A seller with 10 out of 10 good reviews isn't "100% perfect" | Add one good and one bad review before doing the math |
-| Spam filters | A word never seen in spam would make a spam email look 0% spam | Add one to every word's count |
-| Our bigram | `dt` never seen, so "spendthrift" is impossible | Add one to every pair's count |
-
-If you want to go deeper:
-
-- 3Blue1Brown, [Binomial distributions | Probabilities of probabilities](https://www.youtube.com/watch?v=8idr1WZ1A7Q): the online reviews version, beautifully explained.
-- StatQuest, [Naive Bayes, Clearly Explained!!!](https://www.youtube.com/watch?v=O2L2Uv9pdDA): the spam filter version.
-- Andrej Karpathy, [The spelled-out intro to language modeling: building makemore](https://www.youtube.com/watch?v=PaCmpygFfXo): our exact bigram model and the same +1, coded live.
+|     |     |
+| --- | --- |
+|     |     |
 
 ---
 

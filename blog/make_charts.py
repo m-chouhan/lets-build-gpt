@@ -235,8 +235,76 @@ def char_prediction_animation():
     frames[0].save(IMAGES / "char_prediction.gif", save_all=True, append_images=frames[1:], duration=durations, loop=0)
 
 
+# one brick per pipeline step, bottom of the stack first: (name, what it does in post 1, lego color)
+BRICKS = [
+    ("load data", "reads shakespeare.txt", "#c91a09"),
+    ("tokenizer", "text \u2194 ids:  \"hi\" \u2192 [46, 47]", "#fe8a18"),
+    ("split", "90% for learning, 10% locked away", "#f2cd37"),
+    ("train", "count every pair \u2192 65\u00d765 table", "#0055bf"),
+    ("evaluate", "score it on the locked-away 10%", "#237841"),
+    ("generate", "roll dice \u2192 new text", "#81007b"),
+]
+
+
+def shade(hex_color, factor):
+    """Darker (factor < 1) or lighter (factor > 1) version of a color, for the brick's 3D faces."""
+    rgb = [int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    if factor < 1:
+        rgb = [c * factor for c in rgb]
+    else:
+        rgb = [c + (1 - c) * (factor - 1) for c in rgb]
+    return tuple(rgb)
+
+
+def lego_bricks():
+    """The pipeline as a stack of Lego bricks: each step sits on the one below.
+
+    The train brick is pulled halfway out, as if we're about to swap it.
+    """
+    from matplotlib.patches import Ellipse, Polygon, Rectangle
+
+    fig, ax = plt.subplots(figsize=(10, 6.2), facecolor=SURFACE)
+    ax.set_facecolor(SURFACE)
+    ax.set_axis_off()
+    ax.set_aspect("equal")
+    width, height = 4.0, 1.1  # front face of a 2x4 brick
+    depth_x, depth_y = 1.0, 0.55  # how far the top/side faces recede
+    pulled_out = 2.0  # how far the train brick sticks out to the right
+    radius, stud_height = 0.3, 0.22
+    label_x = width + depth_x + pulled_out + 0.35  # one column of notes, clear of the pulled-out brick
+
+    # draw bottom to top, so each brick hides the studs of the one below it
+    for level, (name, detail, color) in enumerate(BRICKS):
+        x, y = (pulled_out if name == "train" else 0), level * height
+        front = [(x, y), (x + width, y), (x + width, y + height), (x, y + height)]
+        side = [(x + width, y), (x + width + depth_x, y + depth_y), (x + width + depth_x, y + height + depth_y), (x + width, y + height)]
+        top = [(x, y + height), (x + width, y + height), (x + width + depth_x, y + height + depth_y), (x + depth_x, y + height + depth_y)]
+        edge = shade(color, 0.6)
+        for face, tone in [(side, 0.75), (top, 1.25), (front, 1.0)]:
+            ax.add_patch(Polygon(face, closed=True, fc=shade(color, tone), ec=edge, lw=0.8))
+
+        for row in (0.75, 0.3):  # back row first so the front row overlaps it
+            for col in range(4):
+                cx = x + 0.5 + col * 1.0 + row * depth_x
+                cy = y + height + row * depth_y
+                ax.add_patch(Ellipse((cx, cy), 2 * radius, radius, fc=shade(color, 0.75), ec=edge, lw=0.8))
+                ax.add_patch(Rectangle((cx - radius, cy), 2 * radius, stud_height, fc=shade(color, 0.75), ec="none"))
+                ax.add_patch(Ellipse((cx, cy + stud_height), 2 * radius, radius, fc=shade(color, 1.25), ec=edge, lw=0.8))
+
+        ink = TEXT if color in ("#fe8a18", "#f2cd37") else "white"
+        ax.text(x + width / 2, y + height / 2, f"{level + 1}. {name}", ha="center", va="center", color=ink, fontsize=13, fontweight="bold")
+        ax.text(label_x, y + height / 2, detail, ha="left", va="center", color=TEXT_MUTED, fontsize=11)
+
+    top_y = len(BRICKS) * height
+    ax.set_xlim(-0.3, label_x + 5.0)
+    ax.set_ylim(-0.2, top_y + 0.95)
+    fig.tight_layout()
+    fig.savefig(IMAGES / "lego_bricks.png", dpi=200)
+
+
 if __name__ == "__main__":
     IMAGES.mkdir(exist_ok=True)
+    lego_bricks()
     scoreboard_chart()
     bigram_heatmap()
     poll_chart()
