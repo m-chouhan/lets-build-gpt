@@ -96,7 +96,7 @@ If you've followed along so far, the next steps are fairly obvious. To build thi
 1. **Load** the text.
 2. **Turn it into numbers**, because computers only understand numbers.
 3. **Hide a slice** of it, so we can later test the model on text it has never seen.
-4. **Count** every pair of neighbouring characters and store the probabilities in a table. That table is our model, and the counting is our "training".
+4. **Train** the model: let it learn from the text which characters tend to follow which.
 5. **Evaluate** how good the model is.
 6. **Generate** new text by rolling dice with those probabilities. Yay!
 
